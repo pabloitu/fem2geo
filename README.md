@@ -52,7 +52,7 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     
 5. Install dependencies
 
-    `pip3 install numpy` 
+    `pip3 install numpy`
     `pip3 install matplotlib`
     `pip3 install meshio`
     `pip3 install pyvista`
