@@ -34,7 +34,7 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
 
 2. Clone repository from `https://github.com/pabloitu/fem2geo` into created directory.
   
-    `clone git https://github.com/pabloitu/fem2geo`
+    `git clone https://github.com/pabloitu/fem2geo`
     
   or download .tar.gz and extract in selected folder
   
