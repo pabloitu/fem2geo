@@ -57,5 +57,6 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     Note: If you want to go back to your default environment use the command `deactivate`.
     
 6. Run test
+
     `python3 tests.py`
 
