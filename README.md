@@ -14,15 +14,19 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
 
 ## Installation instructions
 
-0. * Install git
+0.  * Install pip
+
+      `sudo apt install python3-pip` 
+      
+    * Install git
 
       `sudo apt install git`
    
-   * Install virtualenv
+    * Install virtualenv
    
       `sudo apt install python3-virtualenv`
     
-1. Create working directory 
+1. Create and access working directory 
 
     `mkdir fem2geo`
     
@@ -31,26 +35,28 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
 2. Clone repository from `https://github.com/pabloitu/fem2geo` into created directory.
   
     `clone git https://github.com/pabloitu/fem2geo`
+    
   or download .tar.gz and extract in selected folder
   
-3. Create virtual environment for installation
+3. Create virtual environment for dependencies installation
 
-    `cd csep2`  
-    `mkdir venv`  
-    `cd venv`  
-    `python3 -m venv csep-dev`  
-    `source csep-dev/bin/activate`  
-    `cd ..`  
-    `pip3 install numpy` (Because of obspy and scipy)  
-    `pip3 install wheel`  
-    `pip3 install -r requirements.txt`
+    `python3 -m venv fem2geo` 
+ 
+4. Activate virtual environment
+
+    `source fem2geo/bin/activate`
+    
+  * Note: To deactivate virtual environment and go back to default environment...
+  
+    `deactivate`
+    
+5. Install dependencies
+
+    `pip3 install numpy` 
+    `pip3 install matplotlib`
+    `pip3 install meshio`
+    `pip3 install pyvista`
+    `pip3 install mplstereonet`
     
     Note: If you want to go back to your default environment use the command `deactivate`.
-    
-    Note: There is an issue installing Cartopy on MacOS with Proj >=6.0.0 and will be addressed in 0.18 release of Cartopy. 
-    If this package is needed please manually install or use Conda instructions above. Additionally, if you choose the 
-    manual build, you might need to resolve build issues as they arise. This is usually caused by [not having the proper 
-    python statics installed](https://stackoverflow.com/questions/21530577/fatal-error-python-h-no-such-file-or-directory) to build the binary packages or poorly written setup.py scripts from other packages.
-    
-    Also python 3.7 is required.
-    
+
