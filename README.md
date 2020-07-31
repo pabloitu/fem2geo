@@ -28,9 +28,9 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     
 1. Create and access working directory 
 
-    `mkdir fem2geo`
+    `mkdir fem2geo_workdir`
     
-    `cd fem2geo`
+    `cd fem2geo_workdir`
 
 2. Clone repository from `https://github.com/pabloitu/fem2geo` into created directory.
   
@@ -40,11 +40,11 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
   
 3. Create virtual environment for dependencies installation
 
-    `python3 -m venv fem2geo` 
+    `python3 -m venv fem2geo_venv` 
  
 4. Activate virtual environment
 
-    `source fem2geo/bin/activate`
+    `source fem2geo_venv/bin/activate`
     
   * Note: To deactivate virtual environment and go back to default environment...
   
@@ -57,6 +57,8 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     Note: If you want to go back to your default environment use the command `deactivate`.
     
 6. Run test
+
+    `cd fem2geo`  
 
     `python3 tests.py`
 
