@@ -13,6 +13,7 @@ import mplstereonet as mpl
 #HOLAAA
 
 print('Hola mundo')
+print('hola de francia')
 
 def line_sphe2ned(sphe):
     """
