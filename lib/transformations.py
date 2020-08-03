@@ -164,6 +164,8 @@ def plane_pole2sphe(sphe):
     dip = 90 - sphe[0]
     return np.array([strike, dip])
 
+def transft(asdsa):
+    print('asdsaq')
 
 def lineplane2rake(enu, plane, tol=5e-3):
     """
