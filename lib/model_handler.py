@@ -52,13 +52,3 @@ def get_submodel_sphere(model, center, radius):
         grid.point_arrays[i] = j[points_list]
         
     return grid
-if __name__ == '__main__':
-    
-    filename = '../../test_data/test_box.vtk'
-    full_model = pv.read(filename)
-    
-    center = (22,22, -7)
-    radius = 0.5
-    ien = get_submodel_sphere(full_model, center, radius )
-    ien.save('../../test_data/circle.vtk')
-#    print(ien)
