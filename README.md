@@ -64,5 +64,5 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
 
     `cd fem2geo`  
 
-    `python3 tests.py`
+    `python3 ex1_subset.py`
 
