@@ -67,7 +67,7 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     `python3 ex1_subset.py`
     
     
-7. To run codes from Spyder, within the spyder menu go to Tools/Preferences/Python Interpreter and select "Use the following python interpreter". Select the file $fem2geo_venv/bin/python3, which is located with the virtual environment folder.    Then, spyder should have access to all the dependencies installed within the venv.
+7. To run codes from Spyder, within the spyder menu go to Tools/Preferences/Python Interpreter and select "Use the following python interpreter". Select the file `$fem2geo_venv/bin/python3`, which is located with the virtual environment folder.    Then, spyder should have access to all the dependencies installed within the venv.
 
 
 
