@@ -12,6 +12,8 @@ import mplstereonet as mpl
 
 #HOLAAA
 
+print('Hola mundo')
+
 def line_sphe2ned(sphe):
     """
     Transforms line element from spherical coordinates
