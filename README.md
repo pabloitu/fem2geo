@@ -54,7 +54,11 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
 
     `pip3 install numpy matplotlib meshio pyvista mplstereonet`
     
-    Note: If you want to go back to your default environment use the command `deactivate`.
+    Note: *If you want to go back to your default environment use the command `deactivate`.
+    
+    * To use spyder in the virtual environment, also install
+    
+    `pip3 install ipykernel cloudpickle`
     
 6. Run test
 
