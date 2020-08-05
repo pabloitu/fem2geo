@@ -4,8 +4,8 @@ import meshio as mi
 import mplstereonet as mpl
 import matplotlib.pyplot as plt
 
-import lib.transformations as tr
-import lib.model_handler as mh
+from fem2geo_lib import transform_funcs as tr
+from fem2geo_lib import model_handler as mh
 
 # =============================================================================
 # Get Data
@@ -18,7 +18,7 @@ full_model = pv.read(filename)
 
 ### Select coordinates of circle center and radius
 center = (22,22, -7)
-radius = 0.7
+radius = 0.8
 
 ### Get Submodel
 Submodel = mh.get_submodel_sphere(full_model, center, radius )
