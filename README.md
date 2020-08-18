@@ -52,7 +52,7 @@ which can be then mapped onto a new vtk, or plotted in stereomaps.
     
 5. Install dependencies (within the activated virtual environment!)
 
-    `pip3 install numpy matplotlib meshio pyvista mplstereonet`
+    `pip3 install numpy matplotlib meshio pyvista mplstereonet scipy`
     
     Note: *If you want to go back to your default environment use the command `deactivate`.
     
