@@ -1,10 +1,6 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 import mplstereonet as mpl
-
-
-
 
 # =============================================================================
 # Line elements
@@ -122,13 +118,15 @@ def plane_sphe2ned(sphe):
 
 
     ## Force the limit of the azimutal cosines (cos_a,cos_b)
-    ## to be constant when dip tends to 0, instead of pointing +180.
+    ## to be constant when dip tends to 90, instead of pointing +180.
     ## e.g     cos_a(dip=0.0001) ~= cos_a(dip=0)
     ##         cos_b(dip=0.0001) ~= cos_b(dip=0)
     if n[2] == 0:   
         if n[1] > 0:
-            
             n *= -1
+            
+    ### Correct horizontal planes with normal pointing belog
+    n *= np.sign(n[2]) + (n[2] == 0)
     return n
 
 def plane_sphe2enu(sphe):
@@ -141,10 +139,12 @@ def plane_sphe2enu(sphe):
     v2 = line_sphe2enu([sphe[1], sphe[0] + 90.])  
     n = np.cross(v1, v2)/np.linalg.norm(np.cross(v1, v2))
     
-    
     if n[2] == 0:
         if n[0] < 0:
             n *= -1
+    
+    ### Correct horizontal planes with normal pointing belog
+    n *= np.sign(n[2]) + (n[2] == 0)
     return n
 
 
