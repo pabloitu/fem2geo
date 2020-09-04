@@ -182,6 +182,59 @@ def plot_dilation_tendency(sigma, n_strikes=181, n_dips=46, plot_eigenvec=False)
     return fig, ax, D_reshaped, (mesh_strikes, mesh_dips)
 
 
+def plot_slipndilation_tendency(sigma, n_strikes=181, n_dips=46, plot_eigenvec=False):
+    
+
+    Val, Vec = np.linalg.eig(sigma)
+    
+    Val = np.sort(Val)      ## Sort list of eigen values: minimum is s1
+    Vec = Vec[:, np.argsort(Val)]  ## Sort eigen vectors
+    
+    strikes = np.linspace(0, 360, n_strikes, endpoint=True) ## every 2 angles
+    dips = np.linspace(0, 90, n_dips, endpoint=True)  ## every 2 angles
+    
+    mesh_strikes, mesh_dips = np.meshgrid(strikes, dips)
+
+    # Slip tendency
+    plane_data = np.array([([i[0], i[1]]) for i 
+                                         in np.nditer((mesh_strikes, mesh_dips))])
+   
+    D_s = get_slip_tendency(sigma, plane_data)
+    lon_s, lat_s = mpl.pole(mesh_strikes, mesh_dips)
+    D_reshaped_s = D_s.reshape(mesh_strikes.shape)
+        
+ 
+    # Dilation tendency
+    norms = np.array([tr.plane_sphe2enu([i[0], i[1]]) for i 
+                                         in np.nditer((mesh_strikes, mesh_dips))])
+    a = norms.reshape((mesh_strikes.shape[0], mesh_strikes.shape[1],3))
+
+    
+    D_d = get_dilation_tendency(sigma, norms)
+    lon_d, lat_d = mpl.pole(mesh_strikes, mesh_dips)
+    D_reshaped_d = D_d.reshape(mesh_strikes.shape)
+
+
+    fig = plt.figure(figsize=(18,8))   
+
+    ax_s = fig.add_subplot(121, projection='stereonet')
+    ax_s.grid()
+    ax_d = fig.add_subplot(122, projection='stereonet')
+    ax_d.grid()
+
+    cax = ax_s.pcolormesh(lon_s, lat_s, D_reshaped_s, cmap='jet', shading='auto')
+    
+    cbaxes_s = fig.add_axes([0.48, 0.1, 0.03, 0.3]) #Add additional axis for colorbar
+    fig.colorbar(cax, cax = cbaxes_s, shrink = 0.4)
+
+    cax = ax_d.pcolormesh(lon_d, lat_d, D_reshaped_d, cmap='jet', shading='auto')
+    
+    cbaxes_d = fig.add_axes([0.92, 0.1, 0.03, 0.3]) #Add additional axis for colorbar
+    fig.colorbar(cax, cax = cbaxes_d, shrink = 0.4)
+
+    return fig, ax_s, ax_d, D_reshaped_s, D_reshaped_d, (mesh_strikes, mesh_dips)
+
+
 if __name__ == '__main__':
     
     print('hi')
