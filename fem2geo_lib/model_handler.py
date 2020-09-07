@@ -127,6 +127,37 @@ def get_stress_weightedavg(model):
     
     return avg_sigma
 
+
+def get_stress_weightedavg_wolitho(model, ro = 2800, g = 9.81):
+    
+    tensor_order = [['Stress_xx(MPa)', 'Stress_xy(MPa)', 'Stress_zx(MPa)'],
+                    ['Stress_xy(MPa)', 'Stress_yy(MPa)', 'Stress_yz(MPa)'],
+                    ['Stress_zx(MPa)', 'Stress_yz(MPa)', 'Stress_zz(MPa)']]
+
+    Model = model.compute_cell_sizes()
+    
+    avg_sigma = np.zeros((3,3))
+    
+    cells_centers = model.cell_centers()
+    
+
+    for elem_id in range(Model.number_of_cells):
+  
+        cell_depth = cells_centers.extract_points(elem_id).bounds[5]*-1000
+        
+        avg_sigma += (np.array([np.array([Model.cell_arrays[key][elem_id] 
+                        for key in key_row]) 
+                            for key_row in tensor_order]) + np.array([[ro*g*cell_depth/(10**6), 0 , 0]\
+                   ,[0, ro*g*cell_depth/(10**6), 0],\
+                   [0, 0, ro*g*cell_depth/(10**6)]]))*\
+                    Model.cell_arrays['Volume'][elem_id]
+
+    
+    avg_sigma /= np.sum(Model.cell_arrays['Volume'])
+    
+    
+    return avg_sigma
+    
     
     
     
