@@ -227,11 +227,15 @@ def plot_slipndilation_tendency(sigma, n_strikes=181, n_dips=46, plot_eigenvec=F
     cbaxes_s = fig.add_axes([0.48, 0.1, 0.03, 0.3]) #Add additional axis for colorbar
     fig.colorbar(cax, cax = cbaxes_s, shrink = 0.4)
 
+    cax.set_clim(0,10) # Manual adjust of colorbar limits
+    
     cax = ax_d.pcolormesh(lon_d, lat_d, D_reshaped_d, cmap='jet', shading='auto')
     
     cbaxes_d = fig.add_axes([0.92, 0.1, 0.03, 0.3]) #Add additional axis for colorbar
     fig.colorbar(cax, cax = cbaxes_d, shrink = 0.4)
 
+    cax.set_clim(0,1) # Manual adjust of colorbar limits
+    
     return fig, ax_s, ax_d, D_reshaped_s, D_reshaped_d, (mesh_strikes, mesh_dips)
 
 
