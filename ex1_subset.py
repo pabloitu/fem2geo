@@ -5,37 +5,34 @@ import mplstereonet as mpl
 import matplotlib.pyplot as plt
 
 from fem2geo_lib import transform_funcs as tr
-from fem2geo_lib import model_handler as mh
+from fem2geo_lib import model_handler
 
 # =============================================================================
 # Get Data
 # =============================================================================
 
+# Read File with Pyvista
 filename = './test_data/test_box.vtk'
-
-### Read File with Pyvista
 full_model = pv.read(filename)
 
-### Select coordinates of circle center and radius
-center = (22,22, -7)
+# Select a sphere within the model (instead of a point) to smooth fluctuations.
+# Coordinates of sphere center and radius
+center = (22, 22, -7)
 radius = 0.8
 
-### Get Submodel
-Submodel = mh.get_submodel_sphere(full_model, center, radius )
+# Get Submodel
+Submodel = model_handler.get_submodel_sphere(full_model, center, radius)
 
-### Save submodel for visualization as vtu
-Submodel.save('./test_data/circle.vtu')   #<<<<<<<< Visualize in paraview
+# # Save submodel for visualization as vtu
+Submodel.save('./test_data/circle.vtu')   # <<<<<<<< Visualize in Paraview
 
-### Get Submodel Sigma1 direction
-
+# Get Submodel Sigma1 direction
 print('Present CELL variables in model')
-print(Submodel.cell_arrays.keys())
-
+print(Submodel.cell_data.keys())
 
 ## We select dir_DevStress_1 and dir_DevStress_3 as variables
-
-s1 = Submodel.cell_arrays['dir_DevStress_1']
-s3 = Submodel.cell_arrays['dir_DevStress_3']
+s1 = Submodel.cell_data['dir_DevStress_1']
+s3 = Submodel.cell_data['dir_DevStress_3']
 
 
 ### We iterate over all s1 directions, to get its spherical coordinate
@@ -47,21 +44,21 @@ for i in s1:
     s1_i = tr.line_enu2sphe(s1_up)
     # Save into the list
     s1_sphe.append(s1_i)
-    
+
 ### Same for s3
 s3_sphe = []
 for i in s3:
     s3_up = i*np.sign(i[2])
     s3_i = tr.line_enu2sphe(s3_up)
     s3_sphe.append(s3_i)
- 
-    
-    
+
+
+
 # =============================================================================
-# Plot Data    
+# Plot Data
 # =============================================================================
-    
-    
+
+
 ### Generical initialization of Stereoplots using the library mplstereonet
 
 plt.close('all')
@@ -71,7 +68,7 @@ ax = fig.add_subplot(111, projection='stereonet')
 ### add grid
 ax.grid()
 
-for n,i in enumerate(s1_sphe):
+for n, i in enumerate(s1_sphe):
     mylabel = None
     if n==0:
         mylabel = r'$\sigma_1$ orientation'
@@ -83,11 +80,13 @@ for n, i in enumerate(s3_sphe):
     if n==0:
         mylabel = r'$\sigma_3$ orientation'
     ax.line(i[0],i[1] , c='b', marker='o', markeredgecolor='k', label=mylabel)
-    
-    
+
+
 ax.legend()
-ax.set_title('Stereoplot of $\sigma_1$ and $\sigma_3$ \n' + 
+ax.set_title('Stereoplot of $\sigma_1$ and $\sigma_3$ \n' +
              'n of elements: %i' % Submodel.number_of_cells, y=1.08)
-    
+
+plt.show()
+
 
     

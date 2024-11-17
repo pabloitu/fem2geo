@@ -108,3 +108,5 @@ ax2.legend()
 ax2.set_title('Dilation tendency plot \n' + 
               '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
               (val[0], val[2], (val[1]-val[2])/(val[0]-val[2])),  y=1.05)
+
+plt.show()

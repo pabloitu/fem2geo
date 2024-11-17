@@ -41,15 +41,13 @@ def get_submodel_sphere(model, center, radius):
             cell.extend([points_list.index(k) for k in j[1:]])
             pv_cells.extend(cell)
 
-
-    grid = pv.UnstructuredGrid(np.array(pv_offset), np.array(pv_cells),
+    grid = pv.UnstructuredGrid(np.array(pv_cells),
                                model.celltypes[cells_id], model.points[points_list])
-    
-    for i,j in model.cell_arrays.items():
-        grid.cell_arrays[i] = j[cells_id]
+    for i, j in model.cell_data.items():
+        grid.cell_data[i] = j[cells_id]
         
-    for i,j in model.point_arrays.items():
-        grid.point_arrays[i] = j[points_list]
+    for i, j in model.point_data.items():
+        grid.point_data[i] = j[points_list]
     return grid
 
 
@@ -97,11 +95,11 @@ def get_submodel_box(model, center, dim):
     grid = pv.UnstructuredGrid(np.array(pv_offset), np.array(pv_cells),
                                model.celltypes[cells_id], model.points[points_list])
     
-    for i,j in model.cell_arrays.items():
-        grid.cell_arrays[i] = j[cells_id]
+    for i,j in model.cell_data.items():
+        grid.cell_data[i] = j[cells_id]
         
-    for i,j in model.point_arrays.items():
-        grid.point_arrays[i] = j[points_list]
+    for i,j in model.point_data.items():
+        grid.point_data[i] = j[points_list]
     return grid
 
 
@@ -117,12 +115,12 @@ def get_stress_weightedavg(model):
 
     for elem_id in range(Model.number_of_cells):
             
-        avg_sigma += np.array([np.array([Model.cell_arrays[key][elem_id] 
+        avg_sigma += np.array([np.array([Model.cell_data[key][elem_id]
                         for key in key_row]) 
                             for key_row in tensor_order])*\
-                    Model.cell_arrays['Volume'][elem_id]
+                    Model.cell_data['Volume'][elem_id]
     
-    avg_sigma /= np.sum(Model.cell_arrays['Volume'])
+    avg_sigma /= np.sum(Model.cell_data['Volume'])
     
     
     return avg_sigma
@@ -145,15 +143,15 @@ def get_stress_weightedavg_wolitho(model, ro = 2800, g = 9.81):
   
         cell_depth = cells_centers.extract_points(elem_id).bounds[5]*-1000
         
-        avg_sigma += (np.array([np.array([Model.cell_arrays[key][elem_id] 
+        avg_sigma += (np.array([np.array([Model.cell_data[key][elem_id]
                         for key in key_row]) 
                             for key_row in tensor_order]) + np.array([[ro*g*cell_depth/(10**6), 0 , 0]\
                    ,[0, ro*g*cell_depth/(10**6), 0],\
                    [0, 0, ro*g*cell_depth/(10**6)]]))*\
-                    Model.cell_arrays['Volume'][elem_id]
+                    Model.cell_data['Volume'][elem_id]
 
     
-    avg_sigma /= np.sum(Model.cell_arrays['Volume'])
+    avg_sigma /= np.sum(Model.cell_data['Volume'])
     
     
     return avg_sigma
