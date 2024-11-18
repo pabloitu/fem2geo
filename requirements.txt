@@ -1,0 +1,5 @@
+numpy
+matplotlib
+meshio
+pyvista
+mplstereonet
