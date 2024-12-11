@@ -10,14 +10,14 @@ from fem2geo import tensor_methods as tm
 from fem2geo import transform_funcs as tr
 
 # Select file path
-example_dir = fem2geo.dir_testdata  # examples folder of the fem2geo package
+example_dir = fem2geo.dir_testdata  # examples folder of the fem2geo package ('../test_data')
 filename = os.path.join(example_dir, 'cavity_model.vtk')
 
 # Read File with Pyvista
 full_model = pv.read(filename)
 
 # Select coordinates of circle center and radius
-center = (24.75, 28.5, -7.3)  # dilation roughly between fault and chamber
+center = (24.75, 28.5, -7.3)
 radius = 1
 
 # Get sub_model
