@@ -56,18 +56,17 @@ phi = np.abs((s2 - s3) / (s1 - s3))
 strikes = np.linspace(0, 360, 181, endpoint=True)  # every 2 angles
 dips = np.linspace(0, 90, 46, endpoint=True)  # every 2 angles
 
-# Create a mesh grid (pair strikes=[0, 2, ... 360] with dips = [0, 2 , .. 90])
+# Create a mesh grid (pair strikes=[0, 2, ... 360] with dips = [0, 2 , ... 90]) by its edges
 mesh_strikes, mesh_dips = np.meshgrid(strikes, dips)
 
 # Now we must get the planes normals. 
 #  ** Note that the iteration goes first through columns and then rows of
-#  ** the meshes mesh_strikes and mesh_dips.
+#  ** the meshes mesh_strikes and mesh_dips -- also operates over the cell centers.
 #  **  e.g: (1,1), (1,2), (1,3) ... (i,j), (i,j+1)... (ni, nj-1),(ni,nj)
 
 norms = np.array([tr.plane_sphe2enu([i[0], i[1]]) for i
-                  in np.nditer((mesh_strikes, mesh_dips))])
-
-a = norms.reshape((mesh_strikes.shape[0], mesh_strikes.shape[1], 3))
+                  in np.nditer(((mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2,
+                                (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2))])
 
 # We get the dilation tendency
 D = tm.get_dilation_tendency(Tensor1, norms)
@@ -75,7 +74,7 @@ D = tm.get_dilation_tendency(Tensor1, norms)
 # # Get the stereoplot coordinates (lat, lon) from the strikes and dips
 lon, lat = mpl.pole(mesh_strikes, mesh_dips)
 # # Reshape the Dilation tendency array into the mesh discretization
-D_reshaped = D.reshape(mesh_strikes.shape)
+D_reshaped = D.reshape((mesh_strikes.shape[0] - 1, mesh_strikes.shape[1] - 1))
 
 # Get the Dilation tendency contour stereoplot
 plt.close('all')
@@ -86,7 +85,7 @@ cax = ax.pcolormesh(lon, lat, D_reshaped, cmap='jet', shading='auto')
 
 cbaxes = fig.add_axes([0.90, 0.02, 0.03, 0.3])  # Add additional axis for colorbar
 fig.colorbar(cax, cax=cbaxes, shrink=0.4,
-             label='Dilation Tendency $(\sigma_1 - \sigma_n)/(\sigma_1-\sigma_3)$')
+             label='Dilation Tendency $(\\sigma_1 - \\sigma_n)/(\\sigma_1-\\sigma_3)$')
 
 # Get and plot principal directions
 s1_sphe = tr.line_enu2sphe(s1_dir)
@@ -102,7 +101,7 @@ ax.line(s3_sphe[0], s3_sphe[1], c='w', marker='v',
 ax.legend()
 
 ax.set_title('Example 3a: Pure shear, compressive stress in EW direction\n' +
-             '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
+             '$\\sigma_1=%.3f$, $\\sigma_3=%.3f$, $\\phi=%.2f$' %
              (s1, s3, phi), y=1.05)
 plt.show()
 
@@ -147,10 +146,10 @@ ax.line(s3_sphe[0], s3_sphe[1], c='w', marker='v',
 ax.legend()
 
 ax.set_title('Example 3b: Horizontal Simple Shear\n' +
-             '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
+             '$\\sigma_1=%.3f$, $\\sigma_3=%.3f$, $\\phi=%.2f$' %
              (s1, s3, phi), y=1.05)
 plt.show()
-
+#
 # =============================================================================
 # Example 3c :  Random tensor, no plot of stresses
 # =============================================================================
@@ -171,6 +170,6 @@ fig, ax, D, planes = tm.plot_dilation_tendency(Tensor3_rot)
 
 # Show title and figure
 ax.set_title('Example 3c: Random tensor \n' +
-             '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
+             '$\\sigma_1=%.3f$, $\\sigma_3=%.3f$, $\\phi=%.2f$' %
              (s1, s3, phi), y=1.05)
 plt.show()

@@ -168,7 +168,7 @@ def get_dilation_tendency(sigma, n_disc):
     return np.array(D)
 
 
-def plot_dilation_tendency(sigma, n_strikes=181, n_dips=46):
+def plot_dilation_tendency(sigma, n_strikes=180, n_dips=45):
     """
     Calculates the dilation tendency for tensor projected onto all planes from a polar
     discretization
@@ -186,17 +186,17 @@ def plot_dilation_tendency(sigma, n_strikes=181, n_dips=46):
     Val = np.sort(Val)  # Sort list of eigen values: minimum is s1
     Vec = Vec[:, np.argsort(Val)]  # Sort eigen vectors
 
-    strikes = np.linspace(0, 360, n_strikes, endpoint=True)  # every 2 angles
-    dips = np.linspace(0, 90, n_dips, endpoint=True)  # every 2 angles
+    strikes = np.linspace(0, 360, n_strikes + 1, endpoint=True)  # every 2 angles
+    dips = np.linspace(0, 90, n_dips + 1, endpoint=True)  # every 2 angles
 
     mesh_strikes, mesh_dips = np.meshgrid(strikes, dips)
     norms = np.array([tr.plane_sphe2enu([i[0], i[1]]) for i
-                      in np.nditer((mesh_strikes, mesh_dips))])
-    a = norms.reshape((mesh_strikes.shape[0], mesh_strikes.shape[1], 3))
+                      in np.nditer(((mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2,
+                                    (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2))])
 
     D = get_dilation_tendency(sigma, norms)
     lon, lat = mpl.pole(mesh_strikes, mesh_dips)
-    D_reshaped = D.reshape(mesh_strikes.shape)
+    D_reshaped = D.reshape((mesh_strikes.shape[0] - 1, mesh_strikes.shape[1] - 1))
 
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='stereonet')
@@ -235,20 +235,21 @@ def plot_slipndilation_tendency(sigma, n_strikes=181, n_dips=46):
 
     # Slip tendency
     plane_data = np.array([([i[0], i[1]]) for i
-                           in np.nditer((mesh_strikes, mesh_dips))])
+                           in np.nditer(((mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2,
+                                         (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2))])
 
     D_s = get_slip_tendency(sigma, plane_data)
     lon_s, lat_s = mpl.pole(mesh_strikes, mesh_dips)
-    D_reshaped_s = D_s.reshape(mesh_strikes.shape)
+    D_reshaped_s = D_s.reshape((mesh_strikes.shape[0] - 1, mesh_strikes.shape[1] - 1))
 
     # Dilation tendency
     norms = np.array([tr.plane_sphe2enu([i[0], i[1]]) for i
-                      in np.nditer((mesh_strikes, mesh_dips))])
-    a = norms.reshape((mesh_strikes.shape[0], mesh_strikes.shape[1], 3))
+                      in np.nditer(((mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2,
+                                    (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2))])
 
     D_d = get_dilation_tendency(sigma, norms)
     lon_d, lat_d = mpl.pole(mesh_strikes, mesh_dips)
-    D_reshaped_d = D_d.reshape(mesh_strikes.shape)
+    D_reshaped_d = D_d.reshape((mesh_strikes.shape[0] - 1, mesh_strikes.shape[1] - 1))
 
     fig = plt.figure(figsize=(18, 8))
 

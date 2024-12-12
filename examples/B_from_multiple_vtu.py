@@ -93,5 +93,5 @@ for model, filename in zip(models, filenames):
 # Customize and show plot
 ax.grid()
 ax.legend(handles=legend_elements, loc=1, fontsize=7)
-ax.set_title(r'Stereoplot of $\sigma_1$ and $\sigma_3$', y=1.08)
+ax.set_title('Stereoplot of $\\sigma_1$ and $\\sigma_3$', y=1.08)
 plt.show()

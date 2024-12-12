@@ -95,8 +95,9 @@ for n, i in enumerate(s3_spherical):
 
 # Show plots
 ax.legend()
-ax.set_title('Stereoplot of $\sigma_1$ and $\sigma_3$ \n' +
-             'n of elements: %i' % sub_model.number_of_cells, y=1.08)
+ax.set_title('Stereoplot of $\\sigma_1$ and $\\sigma_3$ \n' +
+             f'number of elements: {sub_model.number_of_cells}', y=1.08)
+plt.savefig('example_a_stereoplot.png', dpi=300)
 plt.show()
 
 
