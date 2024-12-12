@@ -71,7 +71,7 @@ The code consists in two parts:
 
 ### Using conda
 
-1. Install a ``conda`` [distribution](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html). Anaconda is recommended to have a GUI/IDE for python with (spyder), but [Miniforge](https://conda-forge.org/download/) for a lightweight installation.
+1. Install a ``conda`` [distribution](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html). Anaconda is recommended if you use Windows and want to have a GUI/IDE for python with spyder, but [Miniforge](https://conda-forge.org/download/) is recommended for a lightweight Linux installation.
 
 2. Create conda environment:
 
@@ -80,7 +80,7 @@ The code consists in two parts:
    conda create -n fem2geo python=3.12
    conda activate fem2geo
    ```
-   If Miniforge was installed, change `conda` by `mamba`
+   If Miniforge was installed, replace `conda` by `mamba`
 
 3. Clone and install ``fem2geo`` package
     ```
