@@ -94,7 +94,8 @@ The code consists in two parts:
     `python examples/A_principal_directions.py`
 
 
-
+5. modifications by Muriel March
+   updated fem2geo/model_handler.py, E_composite_plot.py and .ptovtuUserDefault file in order to adapt to the new .vtu format (tensor_order of stress field, name, units of stress and coordinates). 
 
 
 
