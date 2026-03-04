@@ -1,0 +1,43 @@
+name: Build and upload to PyPI
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  build:
+    name: Build and upload sdist
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          generate-run-shell: true
+          environment-file: environment.yml
+          create-args: >-
+            python=3.11
+
+      - name: Install py-build and setuptools-scm
+        run: |
+          micromamba run -n fem2geo pip install --upgrade build setuptools-scm
+
+      - name: Build
+        run: |
+          micromamba run -n fem2geo python3 -m build --sdist --wheel --outdir dist/
+
+      - name: Check distribution files
+        run: |
+          micromamba run -n fem2geo pip install twine
+          micromamba run -n fem2geo twine check dist/*
+
+      - name: Publish Package
+        uses: pypa/gh-action-pypi-publish@v1.12.4
