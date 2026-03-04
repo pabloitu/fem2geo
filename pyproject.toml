@@ -59,7 +59,7 @@ dev = [
 Homepage = "https://github.com/pabloitu/fem2geo.git"
 
 [project.scripts]
-floatcsep = "fem2geo.cmd.main:fem2geo"
+fem2geo = "fem2geo.cmd.main:fem2geo"
 
 [tool.setuptools]
 zip-safe = false
