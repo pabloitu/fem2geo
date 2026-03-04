@@ -6,7 +6,7 @@ import os
 
 dir_testdata = os.path.abspath(os.path.join(
             os.path.dirname(__file__),
-            '..', 'test_data'
+            '..', 'examples', 'data'
             )
         )
 

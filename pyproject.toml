@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fem2geo"
+description = "Physics-based Modeling to Structural Geology and Seismology"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+keywords = [
+    "structural geology",
+    "seismology",
+    "finite elements method",
+    "boundary elements method",
+    "continuum mechanics",
+    "physics-based modeling"
+]
+authors = [
+    { name = "Pablo Iturrieta", email = "pciturri@gfz-potsdam.de"},
+    { name = "Felipe Sáez"},
+    { name = "Muriel Gerbault"},
+    { name = "Cécile Massiot"},
+    { name = "Javiera Ruz"},
+    { name = "Gabriela Zañartu"},
+]
+requires-python = ">=3.10,<3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "meshio",
+    "pyvista",
+    "mplstereonet"
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "pytest",
+    "pytest-cov",
+    "sphinx",
+    "sphinx-autoapi",
+    "sphinx_design",
+    "sphinx-toolbox",
+    "sphinx-gallery",
+    "sphinx-rtd-theme",
+    "sphinx_copybutton",
+]
+
+[project.urls]
+Homepage = "https://github.com/pabloitu/fem2geo.git"
+
+[project.scripts]
+floatcsep = "fem2geo.cmd.main:fem2geo"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+include = ["fem2geo*"]
+
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+norecursedirs = ["tutorials", "tests/artifacts"]
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+line-length = 96
+skip-string-normalization = false
+target-version = ["py310", "py311", "py312"]
+
+[tool.flake8]
+ignore = ["E203", "W503", "F401"]
+max-line-length = 96
