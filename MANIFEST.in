@@ -9,6 +9,7 @@ graft fem2geo
 graft tests
 prune docs/_build
 prune docs/reference/generated
+prune examples
 
 global-exclude .git*
 global-exclude *.pyc
