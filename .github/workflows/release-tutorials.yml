@@ -1,0 +1,36 @@
+name: Release Tutorials
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  upload-tutorials:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4.2.2
+
+      - name: Ensure tutorials folder exists
+        run: |
+          test -d tutorials || (echo "tutorials/ folder not found" && exit 1)
+
+      - name: Create tutorials zip (no nested tutorials/ folder)
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          ZIP="fem2geo-tutorials-${TAG}.zip"
+      
+          cd tutorials
+          zip -r "../$ZIP" .
+
+      - name: Upload tutorials zip to the release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          files: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.ZIP_NAME }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

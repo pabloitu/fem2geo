@@ -40,7 +40,7 @@ jobs:
       - name: Install fem2geo
         run: |
           pip install -e .[dev]
-          python -c "import fem2geo; print('Version: ', fem2geo.__version__)"
+          python -c "from importlib.metadata import version; print(version('fem2geo'))"
 
       - name: Free disk
         run: |
@@ -75,7 +75,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-          python -c "import fem2geo; print('fem2geo OK:', fem2geo.__version__)"
+          python -c "from importlib.metadata import version; print(version('fem2geo'))"
 
   pip_smoke_macos:
     if: github.repository == 'pabloitu/fem2geo'
@@ -95,4 +95,4 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-          python -c "import fem2geo; print('fem2geo OK:', fem2geo.__version__)"
+          python -c "from importlib.metadata import version; print(version('fem2geo'))"
