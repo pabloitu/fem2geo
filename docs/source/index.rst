@@ -1,6 +1,4 @@
-======
-fem2geo
-======
+
 
 *Physics-based modeling for structural geology and seismology.*
 
