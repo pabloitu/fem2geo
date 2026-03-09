@@ -1,0 +1,30 @@
+name: docs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install fem2geo
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          python -c "from importlib.metadata import version; print('Version:', version('fem2geo'))"
+
+      - name: Build documentation
+        run: |
+          make -C docs clean
+          make -C docs html
