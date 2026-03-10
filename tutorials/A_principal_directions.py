@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pyvista as pv
 
 import fem2geo
-from fem2geo import transform_funcs as tr
+from fem2geo import transform as tr
 from fem2geo import model_handler
 
 
@@ -97,7 +97,6 @@ for n, i in enumerate(s3_spherical):
 ax.legend()
 ax.set_title('Stereoplot of $\\sigma_1$ and $\\sigma_3$ \n' +
              f'number of elements: {sub_model.number_of_cells}', y=1.08)
-plt.savefig('example_a_stereoplot.png', dpi=300)
 plt.show()
 
 

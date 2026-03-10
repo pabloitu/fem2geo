@@ -9,7 +9,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 import fem2geo
-from fem2geo import transform_funcs as tr
+from fem2geo import transform as tr
 from fem2geo import model_handler as mh
 
 

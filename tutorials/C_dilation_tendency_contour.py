@@ -3,7 +3,7 @@ import mplstereonet as mpl
 import numpy as np
 
 from fem2geo import tensor_methods as tm
-from fem2geo import transform_funcs as tr
+from fem2geo import transform as tr
 
 """
 

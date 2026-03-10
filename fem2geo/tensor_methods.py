@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import mplstereonet as mpl
 import numpy as np
 
-from fem2geo import transform_funcs as tr
+from fem2geo import transform as tr
 
 
 def rotmatrix(angle, axis):
