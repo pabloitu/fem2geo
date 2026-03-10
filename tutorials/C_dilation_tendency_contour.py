@@ -131,7 +131,7 @@ phi = np.abs((s2 - s3) / (s1 - s3))
 
 # This functions returns the figure and axes elements, as well as the slip tendency values (D)
 # and the plane discretization.
-fig, ax, D, mesh_planes = plots.plot_dilation_tendency(Tensor2)
+figure, ax, vals, meshes, mappable, colorbar = plots.plot_dilation_tendency(Tensor2)
 
 # Get and plot principal directions
 s1_sphe = tr.line_enu2sphe(s1_dir)
@@ -167,7 +167,7 @@ Tensor3_rot = tm.rot_tensor(Tensor3_rot, 10, 3)
 
 # This functions returns the figure and axes elements, as well as the slip tendency values (D)
 # and the plane discretization.
-fig, ax, D, planes = plots.plot_dilation_tendency(Tensor3_rot)
+figure, ax, vals, meshes, mappable, colorbar = plots.plot_dilation_tendency(Tensor3_rot)
 
 # Show title and figure
 ax.set_title('Example 3c: Random tensor \n' +

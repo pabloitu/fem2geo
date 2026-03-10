@@ -51,7 +51,7 @@ s3_avg = tr.line_enu2sphe(vec[:, 2].T)
 
 # Get Dilation tendency
 plt.close('all')
-fig, ax, D, planes = plots.plot_dilation_tendency(avg_stress)
+fig, ax, vals, meshes, mappable, colorbar = plots.plot_dilation_tendency(avg_stress)
 ax.grid()
 
 # Plot the stress directions of all elements within sub-model selection
