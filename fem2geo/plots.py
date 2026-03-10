@@ -136,7 +136,7 @@ def plot_slip_tendency(
     if cbar_label:
         cb.set_label(cbar_label)
 
-    return fig, ax, vals, meshes, m, cb
+    return ax, vals, meshes
 
 
 def plot_dilation_tendency(
@@ -175,7 +175,7 @@ def plot_dilation_tendency(
 
     Returns
     -------
-    fig, ax, values, meshes, mappable, colorbar
+    ax, values, meshes
     """
     planes, lon, lat, shp, meshes = _plane_grid(n_strikes, n_dips)
     vals = dilation_tendency(sigma, planes=planes).reshape(shp)
@@ -191,7 +191,7 @@ def plot_dilation_tendency(
     if cbar_label:
         cb.set_label(cbar_label)
 
-    return fig, ax, vals, meshes, m, cb
+    return ax, vals, meshes
 
 
 def plot_slip_dilation_tendency(
@@ -252,4 +252,4 @@ def plot_slip_dilation_tendency(
     if cbar_label_dil:
         cb2.set_label(cbar_label_dil)
 
-    return fig, ax_s, ax_d, slip_vals, dil_vals, meshes, m1, cb1, m2, cb2
+    return ax_s, ax_d, slip_vals, dil_vals, meshes

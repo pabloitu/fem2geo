@@ -49,7 +49,7 @@ s2_avg = tr.line_enu2sphe(vec[:, 1].T)
 s3_avg = tr.line_enu2sphe(vec[:, 2].T)
 
 # Get Slip & Dilation tendency plots simultaneously
-fig, ax1, ax2, slip_vals, dil_vals, meshes, m1, cb1, m2, cb2 = (
+ax1, ax2, slip_vals, dil_vals, meshes = (
     plots.plot_slip_dilation_tendency(avg_stress)
 )
 
@@ -95,5 +95,5 @@ ax2.legend()
 ax2.set_title('Dilation tendency plot \n' +
               '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
               (val[0], val[2], (val[1] - val[2]) / (val[0] - val[2])), y=1.05)
-fig.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
+plt.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
 plt.show()
