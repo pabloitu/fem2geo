@@ -1,6 +1,7 @@
 from fem2geo import model_handler
-from fem2geo import tensor_methods
+from fem2geo import tensor
 from fem2geo import transform
+from fem2geo import plots
 
 import os
 

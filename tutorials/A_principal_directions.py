@@ -1,13 +1,12 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import mplstereonet as mpl
 import pyvista as pv
 
 import fem2geo
 from fem2geo import transform as tr
 from fem2geo import model_handler
-
-
 ###############################################################################
 # This example illustrates the following
 #   1. Read a .vtk file corresponding the results of an ADELI
@@ -97,6 +96,7 @@ for n, i in enumerate(s3_spherical):
 ax.legend()
 ax.set_title('Stereoplot of $\\sigma_1$ and $\\sigma_3$ \n' +
              f'number of elements: {sub_model.number_of_cells}', y=1.08)
+fig.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
 plt.show()
 
 

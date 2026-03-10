@@ -7,6 +7,7 @@ import pyvista as pv
 from matplotlib import colors as mcolors
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+import mplstereonet as mpl
 
 import fem2geo
 from fem2geo import transform as tr
@@ -94,4 +95,5 @@ for model, filename in zip(models, filenames):
 ax.grid()
 ax.legend(handles=legend_elements, loc=1, fontsize=7)
 ax.set_title('Stereoplot of $\\sigma_1$ and $\\sigma_3$', y=1.08)
+fig.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
 plt.show()

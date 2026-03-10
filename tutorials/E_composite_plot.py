@@ -6,8 +6,9 @@ import pyvista as pv
 
 import fem2geo
 from fem2geo import model_handler as mh
-from fem2geo import tensor_methods as tm
+from fem2geo import tensor as tm
 from fem2geo import transform as tr
+from fem2geo import plots
 
 # Select file path
 example_dir = fem2geo.dir_testdata  # examples folder of the fem2geo package ('../test_data')
@@ -48,7 +49,7 @@ s2_avg = tr.line_enu2sphe(vec[:, 1].T)
 s3_avg = tr.line_enu2sphe(vec[:, 2].T)
 
 # Get Slip & Dilation tendency plots simultaneously
-fig, ax1, ax2, D1, D2, planes = tm.plot_slipndilation_tendency(avg_stress)
+fig, ax1, ax2, D1, D2, planes = plots.plot_slip_dilation_tendency(avg_stress)
 
 # Legend and extra directions (sigma1,2,3) for slip tendency plot
 for n, i in enumerate(zip(s1, s2, s3)):
@@ -92,4 +93,5 @@ ax2.legend()
 ax2.set_title('Dilation tendency plot \n' +
               '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
               (val[0], val[2], (val[1] - val[2]) / (val[0] - val[2])), y=1.05)
+fig.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
 plt.show()

@@ -6,8 +6,8 @@ import pyvista as pv
 
 import fem2geo
 from fem2geo import model_handler as mh
-from fem2geo import tensor_methods as tm
 from fem2geo import transform as tr
+from fem2geo import plots
 
 # Select file path
 example_dir = fem2geo.dir_testdata  # examples folder of the fem2geo package
@@ -51,7 +51,7 @@ s3_avg = tr.line_enu2sphe(vec[:, 2].T)
 
 # Get Dilation tendency
 plt.close('all')
-fig, ax, D, planes = tm.plot_dilation_tendency(avg_stress)
+fig, ax, D, planes = plots.plot_dilation_tendency(avg_stress)
 ax.grid()
 
 # Plot the stress directions of all elements within sub-model selection
@@ -74,4 +74,5 @@ ax.legend()
 ax.set_title('Dilation tendency plot \n' +
              '$\sigma_1=%.3f$, $\sigma_3=%.3f$, $\phi=%.2f$' %
              (val[0], val[2], (val[1] - val[2]) / (val[0] - val[2])), y=1.05)
+fig.savefig(f"fig_{__file__.split('/')[-1][0]}_new.png", dpi=200, bbox_inches="tight")
 plt.show()
