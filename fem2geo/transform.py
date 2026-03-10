@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def _unit(v):
+def unit(v):
     """
     Return the unit vector of ``v``.
 
@@ -147,7 +147,7 @@ def line_ned2sphe(ned, eps=1e-12):
     deterministic value (0) is returned when the horizontal component is below
     ``eps``.
     """
-    ned = _unit(ned)
+    ned = unit(ned)
 
     if ned[2] < 0:
         ned = -ned
@@ -395,10 +395,10 @@ def lineplane2rake(enu, plane, tol=5e-3, eps=1e-12):
     if plane.shape != (2,):
         raise ValueError("plane must be a length-2 array: [strike, dip].")
 
-    enu = _unit(enu)
+    enu = unit(enu)
 
-    rho = _unit(line_sphe2enu([0.0, plane[0]]))
-    mu = _unit(line_sphe2enu(line_rake2sphe(np.array([plane[0], plane[1], 90.0]))))
+    rho = unit(line_sphe2enu([0.0, plane[0]]))
+    mu = unit(line_sphe2enu(line_rake2sphe(np.array([plane[0], plane[1], 90.0]))))
 
     n = np.cross(rho, mu)
     nn = np.linalg.norm(n)
