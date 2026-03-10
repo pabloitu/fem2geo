@@ -1,13 +1,5 @@
 import numpy as np
 
-# Remove these if they are truly unused in this module.
-# import matplotlib.pyplot as plt
-# import mplstereonet as mpl
-
-
-# =============================================================================
-# Basis transform
-# =============================================================================
 
 def _unit(v):
     """
@@ -89,10 +81,6 @@ def ned_to_enu(v_ned):
     return np.array([v_ned[1], v_ned[0], -v_ned[2]], dtype=float)
 
 
-# =============================================================================
-# Line elements
-# =============================================================================
-
 def line_sphe2ned(sphe):
     """
     Transform a line element from spherical coordinates to cartesian NED.
@@ -120,9 +108,9 @@ def line_sphe2ned(sphe):
 
     ned = np.array(
         [
-            np.cos(azm) * np.cos(plunge),  # N
-            np.sin(azm) * np.cos(plunge),  # E
-            np.sin(plunge),                # D (positive down)
+            np.cos(azm) * np.cos(plunge),
+            np.sin(azm) * np.cos(plunge),
+            np.sin(plunge),
         ],
         dtype=float,
     )
@@ -133,7 +121,7 @@ def line_sphe2ned(sphe):
     return ned
 
 
-def line_ned2sphe(ned):
+def line_ned2sphe(ned, eps=1e-12):
     """
     Transform a line element from cartesian NED coordinates to spherical.
 
@@ -142,6 +130,8 @@ def line_ned2sphe(ned):
     ned : array-like, shape (3,)
         Line direction cosines in NED coordinates: [N, E, D]. The input may be
         non-unit; it will be normalized.
+    eps : float
+        Threshold to treat a line as near-vertical when computing azimuth.
 
     Returns
     -------
@@ -153,7 +143,9 @@ def line_ned2sphe(ned):
     Notes
     -----
     Line elements are treated as axes (v and -v equivalent) and canonicalized
-    to be down-directed (D >= 0).
+    to be down-directed (D >= 0). Azimuth is undefined for vertical lines; a
+    deterministic value (0) is returned when the horizontal component is below
+    ``eps``.
     """
     ned = _unit(ned)
 
@@ -162,8 +154,7 @@ def line_ned2sphe(ned):
 
     plunge = np.rad2deg(np.arcsin(np.clip(ned[2], -1.0, 1.0)))
 
-    # azimuth undefined for near-vertical lines; pick a deterministic value
-    if np.hypot(ned[0], ned[1]) < 1e-12:
+    if np.hypot(ned[0], ned[1]) < eps:
         azm = 0.0
     else:
         azm = (np.rad2deg(np.arctan2(ned[1], ned[0])) + 360.0) % 360.0
@@ -197,7 +188,7 @@ def line_sphe2enu(sphe):
     return ned_to_enu(ned)
 
 
-def line_enu2sphe(enu):
+def line_enu2sphe(enu, eps=1e-12):
     """
     Transform a line element from cartesian ENU coordinates to spherical.
 
@@ -206,6 +197,8 @@ def line_enu2sphe(enu):
     enu : array-like, shape (3,)
         Line direction cosines in ENU coordinates: [E, N, U]. The input may be
         non-unit; it will be normalized internally via conversion to NED.
+    eps : float
+        Threshold to treat a line as near-vertical when computing azimuth.
 
     Returns
     -------
@@ -213,14 +206,9 @@ def line_enu2sphe(enu):
         Spherical line coordinates [plunge, azm] in degrees (NED convention):
           - azm is azimuth clockwise from North in [0, 360)
           - plunge is positive downward in [0, 90]
-
-    Notes
-    -----
-    Line elements are treated as axes (v and -v equivalent) and canonicalized
-    to be down-directed (D >= 0) in the internal NED representation.
     """
     ned = enu_to_ned(enu)
-    return line_ned2sphe(ned)
+    return line_ned2sphe(ned, eps=eps)
 
 
 def line_rake2sphe(rake):
@@ -230,25 +218,22 @@ def line_rake2sphe(rake):
     Parameters
     ----------
     rake : array-like, shape (3,)
-        [strike, dip, rake] in degrees, where strike/dip follow the right-hand rule
-        convention and rake is measured within the plane from the strike direction.
+        [strike, dip, rake] in degrees. Strike/dip follow the right-hand rule
+        convention. Rake is measured within the plane from the strike direction.
 
     Returns
     -------
     numpy.ndarray, shape (2,)
-        Spherical line coordinates [plunge, azm] in degrees.
+        [plunge, azm] in degrees.
 
     Raises
     ------
     ValueError
-        If rake angle is not within [0, 180].
-
-    Notes
-    -----
-    Rake is restricted to [0, 180] to avoid sense ambiguity. Sense of movement, if
-    needed, should be tracked separately.
+        If input shape is invalid or rake is not within [0, 180].
     """
     rake = np.asarray(rake, dtype=float)
+    if rake.shape != (3,):
+        raise ValueError("rake must be a length-3 array: [strike, dip, rake].")
     if rake[2] < 0 or rake[2] > 180:
         raise ValueError("Rake angle is not within 0 and 180 deg")
 
@@ -256,7 +241,7 @@ def line_rake2sphe(rake):
     dip = np.deg2rad(rake[1])
     r = np.deg2rad(rake[2])
 
-    plunge = np.rad2deg(np.arcsin(np.sin(r) * np.sin(dip)))
+    plunge = np.rad2deg(np.arcsin(np.clip(np.sin(r) * np.sin(dip), -1.0, 1.0)))
     azm = np.rad2deg(strike + np.arctan2(np.cos(dip) * np.sin(r), np.cos(r)))
 
     if plunge < 0.0:
@@ -264,14 +249,10 @@ def line_rake2sphe(rake):
 
     azm = (azm + 360.0) % 360.0
 
-    return np.array([np.abs(plunge), azm], dtype=float)
+    return np.array([abs(plunge), azm], dtype=float)
 
 
-# =============================================================================
-# Plane elements
-# =============================================================================
-
-def plane_sphe2ned(sphe):
+def plane_sphe2ned(sphe, eps=1e-12):
     """
     Convert a plane (strike/dip) to the NED unit normal vector.
 
@@ -279,6 +260,8 @@ def plane_sphe2ned(sphe):
     ----------
     sphe : array-like, shape (2,)
         Plane spherical coordinates [strike, dip] in degrees.
+    eps : float
+        Tolerance used to detect degenerate cases and near-horizontal normals.
 
     Returns
     -------
@@ -287,29 +270,33 @@ def plane_sphe2ned(sphe):
 
     Notes
     -----
-    The normal is constructed from:
-      - strike direction (horizontal line at azm=strike)
-      - down-dip direction (plunge=dip at azm=strike+90)
-
-    The result is then canonicalized to be down-directed (D >= 0).
+    The normal is canonicalized to be down-directed (D >= 0). When D is near zero,
+    a deterministic sign is chosen.
     """
     sphe = np.asarray(sphe, dtype=float)
+    if sphe.shape != (2,):
+        raise ValueError("sphe must be a length-2 array: [strike, dip].")
 
     v1 = line_sphe2ned([0.0, sphe[0]])
     v2 = line_sphe2ned([sphe[1], sphe[0] + 90.0])
 
     cr = np.cross(v1, v2)
-    n = cr / np.linalg.norm(cr)
+    nrm = np.linalg.norm(cr)
+    if nrm < eps:
+        raise ValueError("Degenerate plane definition (normal is undefined).")
 
-    if n[2] == 0:
-        if n[1] > 0:
-            n *= -1
+    n = cr / nrm
 
-    n *= np.sign(n[2]) + (n[2] == 0)
+    if abs(n[2]) < eps and n[1] > 0:
+        n *= -1.0
+
+    if n[2] < 0:
+        n *= -1.0
+
     return n
 
 
-def plane_sphe2enu(sphe):
+def plane_sphe2enu(sphe, eps=1e-12):
     """
     Convert a plane (strike/dip) to the ENU unit normal vector.
 
@@ -317,6 +304,8 @@ def plane_sphe2enu(sphe):
     ----------
     sphe : array-like, shape (2,)
         Plane spherical coordinates [strike, dip] in degrees.
+    eps : float
+        Tolerance used to detect degenerate cases and near-horizontal normals.
 
     Returns
     -------
@@ -325,25 +314,29 @@ def plane_sphe2enu(sphe):
 
     Notes
     -----
-    The normal is constructed from ENU versions of:
-      - strike direction (horizontal line at azm=strike)
-      - down-dip direction (plunge=dip at azm=strike+90)
-
-    The result is canonicalized to be up-directed (U >= 0).
+    The normal is canonicalized to be up-directed (U >= 0). When U is near zero,
+    a deterministic sign is chosen.
     """
     sphe = np.asarray(sphe, dtype=float)
+    if sphe.shape != (2,):
+        raise ValueError("sphe must be a length-2 array: [strike, dip].")
 
     v1 = line_sphe2enu([0.0, sphe[0]])
     v2 = line_sphe2enu([sphe[1], sphe[0] + 90.0])
 
     cr = np.cross(v1, v2)
-    n = cr / np.linalg.norm(cr)
+    nrm = np.linalg.norm(cr)
+    if nrm < eps:
+        raise ValueError("Degenerate plane definition (normal is undefined).")
 
-    if n[2] == 0:
-        if n[0] < 0:
-            n *= -1
+    n = cr / nrm
 
-    n *= np.sign(n[2]) + (n[2] == 0)
+    if abs(n[2]) < eps and n[0] < 0:
+        n *= -1.0
+
+    if n[2] < 0:
+        n *= -1.0
+
     return n
 
 
@@ -360,36 +353,31 @@ def plane_pole2sphe(sphe):
     -------
     numpy.ndarray, shape (2,)
         Plane spherical coordinates [strike, dip] in degrees.
-
-    Notes
-    -----
-    Uses the standard relationship:
-      - dip = 90 - pole_plunge
-      - strike = pole_azm + 90 (mod 360)
     """
     sphe = np.asarray(sphe, dtype=float)
+    if sphe.shape != (2,):
+        raise ValueError("sphe must be a length-2 array: [plunge, azm].")
 
-    strike = sphe[1] + 90.0
-    strike = (strike + 360.0) % 360.0
+    strike = (sphe[1] + 90.0) % 360.0
     dip = 90.0 - sphe[0]
 
     return np.array([strike, dip], dtype=float)
 
 
-def lineplane2rake(enu, plane, tol=5e-3):
+def lineplane2rake(enu, plane, tol=5e-3, eps=1e-12):
     """
     Transform a line (ENU) contained within a plane (strike/dip) into strike/dip/rake.
 
     Parameters
     ----------
     enu : array-like, shape (3,)
-        Line direction in ENU coordinates [E, N, U]. Treated as an axis (v and -v
-        equivalent).
+        Line direction in ENU coordinates [E, N, U]. Treated as an axis.
     plane : array-like, shape (2,)
         Plane spherical coordinates [strike, dip] in degrees.
     tol : float
-        Tolerance for the scalar triple product containment test. This is applied
-        after normalizing vectors to unit length.
+        Tolerance for the scalar triple product containment test (unit vectors).
+    eps : float
+        Threshold for near-parallel/degenerate checks.
 
     Returns
     -------
@@ -398,29 +386,44 @@ def lineplane2rake(enu, plane, tol=5e-3):
 
     Raises
     ------
+    ValueError
+        If input shapes are invalid or the plane basis is degenerate.
     Exception
         If the line is not contained within the plane (within tolerance).
     """
-    enu = _unit(enu)
     plane = np.asarray(plane, dtype=float)
+    if plane.shape != (2,):
+        raise ValueError("plane must be a length-2 array: [strike, dip].")
+
+    enu = _unit(enu)
 
     rho = _unit(line_sphe2enu([0.0, plane[0]]))
     mu = _unit(line_sphe2enu(line_rake2sphe(np.array([plane[0], plane[1], 90.0]))))
-    n = np.cross(rho, mu)
 
-    trp = np.abs(np.linalg.det(np.vstack((enu, mu, rho))))
+    n = np.cross(rho, mu)
+    nn = np.linalg.norm(n)
+    if nn < eps:
+        raise ValueError("Degenerate plane basis (rho and mu nearly parallel).")
+    n = n / nn
+
+    trp = abs(np.linalg.det(np.vstack((enu, mu, rho))))
     if trp > tol:
         raise Exception(
             "Line is not contained within the plane.\n "
             "  scalar triple prod:  %.5e" % trp
         )
 
-    r = np.rad2deg(np.arccos(np.clip(np.dot(rho, enu), -1.0, 1.0)))
+    c = float(np.clip(np.dot(rho, enu), -1.0, 1.0))
+    r = float(np.rad2deg(np.arccos(c)))
 
     R_hat = np.cross(rho, enu)
-    R_hat = R_hat / np.linalg.norm(R_hat)
+    Rn = np.linalg.norm(R_hat)
+    if Rn < eps:
+        r = 0.0 if c >= 0.0 else 180.0
+        return np.array([plane[0], plane[1], r], dtype=float)
 
-    if np.dot(R_hat, n) > 0:
+    R_hat = R_hat / Rn
+    if np.dot(R_hat, n) > 0.0:
         r = 180.0 - r
 
     return np.array([plane[0], plane[1], r], dtype=float)
