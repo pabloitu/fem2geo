@@ -1,0 +1,10 @@
+#!/bin/bash
+python3 /home_path/fem2geo_dir/G_SummarisedTendency_plot_MultiplePoints.py \
+	--model_name cBaUn \
+    --example_dir /home_path/run_dir/ \
+    --filename pcBaUn.2.vtu \
+	--points cBaUn_27points.csv \
+	--outdir ./output_Tsd_27points \
+	--dpi 150 \
+	--color_min_summary 0 \
+	--color_max_summary 2

@@ -1,0 +1,8 @@
+#!/bin/bash
+python3 /home_path/fem2geo_dir/F_SlipDilationSummarisedTendency_plot_MultiplePoints.py \
+	--model_name cBaUn \
+    --example_dir /home_path/run_dir/ \
+    --filename pcBaUn.2.vtu \
+	--points /home_path/run_dir/cBaUn_27points.csv \
+	--outdir ./output_TsTdTsd_27points \
+	--dpi 150
