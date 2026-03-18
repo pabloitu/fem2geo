@@ -6,15 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "fem2geo"
 description = "Physics-based Modeling to Structural Geology and Seismology"
 readme = { file = "README.md", content-type = "text/markdown" }
-license = "BSD-3-Clause"
+license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 keywords = [
     "structural geology",
+    "geomechanics",
+    "finite element modeling",
+    "stress analysis",
     "seismology",
-    "finite elements method",
-    "boundary elements method",
-    "continuum mechanics",
-    "physics-based modeling"
+    "Python",
 ]
 authors = [
     { name = "Pablo Iturrieta", email = "pciturri@gfz-potsdam.de"},
@@ -23,6 +23,8 @@ authors = [
     { name = "Cécile Massiot"},
     { name = "Javiera Ruz"},
     { name = "Gabriela Zañartu"},
+    { name = "Diego Torres"},
+    { name = "José Cembrano"}
 ]
 requires-python = ">=3.10,<3.13"
 classifiers = [
@@ -31,6 +33,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+
 dependencies = [
     "numpy",
     "matplotlib",

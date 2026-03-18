@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: "If you use fem2geo in your research, please cite the Zenodo release."
+title: "fem2geo: Physics-Based Modeling to Structural Geology and Seismology"
+type: software
+license: "GPL-3.0-only"
+repository-code: "https://github.com/pabloitu/fem2geo"
+version: "0.1.1"
+doi: "10.5281/zenodo.19096112"
+publisher: "Zenodo"
+authors:
+  - family-names: "Iturrieta"
+    given-names: "Pablo"
+    orcid: "https://orcid.org/0000-0002-4787-1343"
+    affiliation: "GFZ Helmholtz Centre for Geosciences"
+  - family-names: "Sáez"
+    given-names: "Felipe"
+    orcid: "https://orcid.org/0000-0002-6687-737X"
+    affiliation: "Géosciences Montpellier"
+  - family-names: "Gerbault"
+    given-names: "Muriel"
+    orcid: "https://orcid.org/0000-0003-3455-6683"
+    affiliation: "GET - Géosciences Environnement Toulouse"
+  - family-names: "Massiot"
+    given-names: "Cécile"
+    orcid: "https://orcid.org/0000-0002-7250-8554"
+    affiliation: "GNS Science | Te Pū Ao, Lower Hutt, New Zealand"
+  - family-names: "Ruz"
+    given-names: "Javiera"
+    orcid: "https://orcid.org/0000-0002-1235-2156"
+    affiliation: "Geology Department, University of Otago, Dunedin, New Zealand"
+  - family-names: "Zañartu"
+    given-names: "Gabriela"
+    affiliation: "Pontificia Universidad Católica de Chile"
+  - family-names: "Torres"
+    given-names: "Diego"
+    affiliation: "Pontificia Universidad Católica de Chile"
+  - family-names: "Cembrano"
+    given-names: "José"
+    orcid: "https://orcid.org/0009-0003-1178-0874"
+    affiliation: "Pontificia Universidad Católica de Chile"
+keywords:
+  - structural geology
+  - geomechanics
+  - finite element modeling
+  - stress analysis
+  - seismology
+  - Python
