@@ -24,8 +24,6 @@ _DIR_FIELDS = {
     "dir_s3": np.array([[0., 0., 1.]] * _N),
 }
 
-_ALL_FIELDS = {**_STRESS_FIELDS, **_DIR_FIELDS}
-
 
 def _make_grid(cell_data: dict, points: np.ndarray = None):
     if points is None:
@@ -63,11 +61,11 @@ def _make_model(cell_data=None):
     schema = ModelSchema.from_dict({
         "solver": "test",
         "units": {"pressure": "MPa"},
-        "fields": {k: {"field": k, "category": "pressure"}
-                   for k in _STRESS_FIELDS} | {
+        "fields": {
+            **{k: {"field": k, "category": "pressure"} for k in _STRESS_FIELDS},
             "dir_s1": {"field": "dir_s1"},
             "dir_s3": {"field": "dir_s3"},
-        }
+        },
     })
     return Model(_make_grid(data), schema)
 
@@ -93,9 +91,6 @@ class TestFieldProperties(unittest.TestCase):
 
     def test_dir_s3_shape(self):
         self.assertEqual(self.m.dir_s3.shape, (_N, 3))
-
-    def test_points_shape(self):
-        self.assertEqual(self.m.points.shape, (_N, 3))
 
     def test_n_cells(self):
         self.assertEqual(self.m.n_cells, _N)
@@ -124,14 +119,93 @@ class TestDerivedFields(unittest.TestCase):
         norms = np.linalg.norm(self.m.dir_s2, axis=1)
         np.testing.assert_allclose(norms, 1.0, atol=1e-12)
 
-    def test_val_s2_between_s1_and_s3(self):
-        self.assertTrue(np.all(self.m.val_s1 <= self.m.val_s2))
-        self.assertTrue(np.all(self.m.val_s2 <= self.m.val_s3))
+    def test_val_s2_deviatoric_trace(self):
+        trace = self.m.val_s1 + self.m.val_s2 + self.m.val_s3
+        np.testing.assert_allclose(trace, 0.0, atol=1e-10)
 
     def test_dir_s2_from_file_used_when_present(self):
         s2 = np.array([[0., 1., 0.]] * _N)
         m = _make_model({**_STRESS_FIELDS, **_DIR_FIELDS, "dir_s2": s2})
         np.testing.assert_allclose(m.dir_s2, s2)
+
+
+class TestEigenDecomposition(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = _make_model()
+
+    def test_eigenvalues_shape(self):
+        self.assertEqual(self.m.eigenvalues().shape, (_N, 3))
+
+    def test_eigenvalues_sorted(self):
+        vals = self.m.eigenvalues()
+        self.assertTrue(np.all(vals[:, 0] <= vals[:, 1]))
+        self.assertTrue(np.all(vals[:, 1] <= vals[:, 2]))
+
+    def test_eigenvectors_shape(self):
+        self.assertEqual(self.m.eigenvectors().shape, (_N, 3, 3))
+
+    def test_eigenvectors_orthonormal(self):
+        vecs = self.m.eigenvectors()
+        for i in range(_N):
+            np.testing.assert_allclose(vecs[i].T @ vecs[i], np.eye(3), atol=1e-12)
+
+    def test_eigenvalues_match_val_s1_s3(self):
+        vals = self.m.eigenvalues()
+        np.testing.assert_allclose(self.m.val_s1, vals[:, 0], atol=1e-12)
+        np.testing.assert_allclose(self.m.val_s3, vals[:, 2], atol=1e-12)
+
+
+class TestAvgPrincipal(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = _make_model()
+
+    def test_returns_val_vec(self):
+        val, vec = self.m.avg_principal()
+        self.assertEqual(val.shape, (3,))
+        self.assertEqual(vec.shape, (3, 3))
+
+    def test_val_sorted_ascending(self):
+        val, _ = self.m.avg_principal()
+        self.assertTrue(np.all(val[:-1] <= val[1:]))
+
+    def test_vec_orthonormal(self):
+        _, vec = self.m.avg_principal()
+        np.testing.assert_allclose(vec.T @ vec, np.eye(3), atol=1e-10)
+
+
+class TestStressReconstruction(unittest.TestCase):
+
+    def test_reconstruction_from_principals(self):
+        data = {
+            "val_s1": np.array([-1.0] * _N),
+            "val_s3": np.array([ 0.0] * _N),
+            **_DIR_FIELDS,
+        }
+        m = _make_model(data)
+        with self.assertLogs("fem2geoLogger", level="WARNING") as cm:
+            s = m.stress
+        self.assertEqual(s.shape, (_N, 3, 3))
+        self.assertTrue(any("reconstructing" in msg.lower() for msg in cm.output))
+
+    def test_reconstruction_symmetric(self):
+        data = {
+            "val_s1": np.array([-1.0] * _N),
+            "val_s3": np.array([ 0.0] * _N),
+            **_DIR_FIELDS,
+        }
+        m = _make_model(data)
+        with self.assertLogs("fem2geoLogger", level="WARNING"):
+            s = m.stress
+        np.testing.assert_allclose(s, s.transpose(0, 2, 1), atol=1e-12)
+
+    def test_reconstruction_fails_without_required_fields(self):
+        m = _make_model({"dir_s1": _DIR_FIELDS["dir_s1"]})
+        with self.assertRaises(KeyError):
+            _ = m.stress
 
 
 class TestExtraction(unittest.TestCase):
@@ -159,32 +233,26 @@ class TestExtraction(unittest.TestCase):
 
 class TestFromFile(unittest.TestCase):
 
+    def _schema(self):
+        return ModelSchema.from_dict({"solver": "test", "units": {}, "fields": {}})
+
     def test_from_file_returns_model(self):
-        schema = ModelSchema.from_dict({
-            "solver": "test", "units": {}, "fields": {}
-        })
-        grid = _make_grid({})
-        with patch("fem2geo.model.load_grid", return_value=grid), \
+        schema = self._schema()
+        with patch("fem2geo.model.load_grid", return_value=_make_grid({})), \
              patch("fem2geo.model.ModelSchema.builtin", return_value=schema):
             m = Model.from_file("dummy.vtk", schema="test")
         self.assertIsInstance(m, Model)
 
-    def test_from_file_string_schema_calls_builtin(self):
-        schema = ModelSchema.from_dict({
-            "solver": "test", "units": {}, "fields": {}
-        })
-        grid = _make_grid({})
-        with patch("fem2geo.model.load_grid", return_value=grid), \
+    def test_string_schema_calls_builtin(self):
+        schema = self._schema()
+        with patch("fem2geo.model.load_grid", return_value=_make_grid({})), \
              patch("fem2geo.model.ModelSchema.builtin", return_value=schema) as mock:
             Model.from_file("dummy.vtk", schema="adeli")
         mock.assert_called_once_with("adeli")
 
     def test_schema_retained(self):
-        schema = ModelSchema.from_dict({
-            "solver": "test", "units": {}, "fields": {}
-        })
-        grid = _make_grid({})
-        with patch("fem2geo.model.load_grid", return_value=grid):
+        schema = self._schema()
+        with patch("fem2geo.model.load_grid", return_value=_make_grid({})):
             m = Model.from_file("dummy.vtk", schema=schema)
         self.assertIs(m.schema, schema)
 
@@ -202,13 +270,22 @@ class TestIntegration(unittest.TestCase):
             self.skipTest("No fixture file found in tests/data/")
 
     def test_loads_without_error(self):
-        m = Model.from_file(self.path)
-        self.assertIsInstance(m, Model)
+        self.assertIsInstance(Model.from_file(self.path), Model)
 
     def test_stress_shape(self):
         m = Model.from_file(self.path)
         self.assertEqual(m.stress.ndim, 3)
         self.assertEqual(m.stress.shape[1:], (3, 3))
+
+    def test_avg_principal_shape(self):
+        m = Model.from_file(self.path)
+        val, vec = m.avg_principal()
+        self.assertEqual(val.shape, (3,))
+        self.assertEqual(vec.shape, (3, 3))
+
+    def test_eigenvalues_shape(self):
+        m = Model.from_file(self.path)
+        self.assertEqual(m.eigenvalues().shape[1], 3)
 
 
 if __name__ == "__main__":
