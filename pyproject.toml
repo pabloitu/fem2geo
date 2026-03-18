@@ -36,7 +36,8 @@ dependencies = [
     "matplotlib",
     "meshio",
     "pyvista",
-    "mplstereonet"
+    "mplstereonet",
+    "pyyaml"
 ]
 dynamic = ["version"]
 
@@ -59,7 +60,7 @@ dev = [
 Homepage = "https://github.com/pabloitu/fem2geo.git"
 
 [project.scripts]
-fem2geo = "fem2geo.cmd.main:fem2geo"
+fem2geo = "fem2geo.runner:main"
 
 [tool.setuptools]
 zip-safe = false
