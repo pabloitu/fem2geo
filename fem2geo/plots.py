@@ -175,3 +175,25 @@ def stereo_contour(ax, directions, label=None, color="k", levels=4, sigma=2,
                        measurement="lines", colors=color,
                        levels=levels, sigma=sigma,
                        linewidths=linewidth, **kwargs)
+
+
+def stereo_pole(ax, planes, label=None, **kwargs):
+    """
+    Plot poles to planes on a stereonet axes.
+
+    Each plane is defined by strike/dip (right-hand rule). The pole is
+    plotted using ``ax.pole``.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    planes : array-like, shape (2,) or (N, 2)
+        Strike/dip pairs in degrees.
+    label : str, optional
+        Label assigned to the first point only (legend-safe).
+    **kwargs
+        Forwarded to ``ax.pole``.
+    """
+    planes = np.atleast_2d(planes)
+    for n, (strike, dip) in enumerate(planes):
+        ax.pole(strike, dip, label=label if n == 0 else None, **kwargs)

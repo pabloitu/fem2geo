@@ -1,0 +1,30 @@
+job: fracture_analysis
+schema: adeli
+
+model: ../data/model_a.vtu
+
+zone:
+  type: sphere
+  center: [ 25, 30, -10 ]
+  radius: 1
+
+data:
+  fractures:
+    file: ../data/fractures.csv
+
+plot:
+  title: "Structural data vs model stress — with cell spread"
+  figsize: [ 9, 9 ]
+  dpi: 300
+  avg_directions:
+    show: true
+    markersize: 10
+  cell_directions:
+    show: true
+    style: scatter
+    color: "grey"
+    markersize: 3
+    alpha: 0.3
+
+output:
+  save_vtu: true

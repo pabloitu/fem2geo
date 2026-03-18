@@ -1,0 +1,13 @@
+job: fracture_analysis
+schema: adeli
+
+model: ../data/model_a.vtu
+
+zone:
+  type: sphere
+  center: [25, 30, -10]
+  radius: 1
+
+data:
+  fractures:
+    file: ../data/fractures.csv
