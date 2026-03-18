@@ -1,255 +1,177 @@
-import numpy as np
-import matplotlib.pyplot as plt
+from dataclasses import dataclass, asdict
+
 import mplstereonet as mpl
+import numpy as np
 
-from fem2geo.tensor import slip_tendency, dilation_tendency, grid_nodes, grid_centers
+from fem2geo.utils.tensor import grid_nodes, grid_centers, slip_tendency, dilation_tendency
 
-
-__all__ = [
-    "plot_slip_tendency",
-    "plot_dilation_tendency",
-    "plot_slip_dilation_tendency",
+MODEL_COLORS = [
+    "#E63946",  # red
+    "#2196F3",  # blue
+    "#4CAF50",  # green
+    "#FF9800",  # orange
+    "#9C27B0",  # purple
+    "#00BCD4",  # cyan
+    "#FF5722",  # deep orange
+    "#607D8B",  # blue-grey
 ]
 
+_TENDENCY_FNS = {"slip": slip_tendency, "dilation": dilation_tendency}
+_CBAR_LABELS = {
+    "slip": r"Slip tendency $|\tau|/|\sigma_n|$",
+    "dilation": r"Dilation tendency $(\sigma_1-\sigma_n)/(\sigma_1-\sigma_3)$",
+}
+_MARKERS = {"s1": "o", "s2": "s", "s3": "v"}
 
-def _stereo_ax(fig, gs_cell, grid=True):
+
+@dataclass
+class PlotConfig:
     """
-    Create a stereonet axes in a GridSpec cell.
+    Style for a plotted direction set (σ1, σ2, or σ3).
+
+    All fields map directly to matplotlib kwargs. Marker shape is set
+    per-axis by the job and should not be overridden in the config.
 
     Parameters
     ----------
-    fig : matplotlib.figure.Figure
-        Figure handle.
-    gs_cell : matplotlib.gridspec.SubplotSpec
-        GridSpec cell.
-    grid : bool
-        Whether to show the stereonet grid.
-
-    Returns
-    -------
-    matplotlib.axes.Axes
-        Stereonet axes.
+    color : str
+    markersize : float
+    markeredgecolor : str
+    alpha : float
+    linewidth : float
+        Contour line width (contour style only).
+    levels : int
+        Number of density contour lines (contour style only).
+    sigma : float
+        Maximum sigma level for density contours (contour style only).
     """
-    ax = fig.add_subplot(gs_cell, projection="stereonet")
-    if grid:
-        ax.grid(True)
-    return ax
+    color: str = "k"
+    markersize: float = 8
+    markeredgecolor: str = "k"
+    alpha: float = 1.0
+    linewidth: float = 1.0
+    levels: int = 4
+    sigma: float = 2.0
+
+    @classmethod
+    def avg(cls, color: str = "k") -> "PlotConfig":
+        return cls(color=color, markersize=8, markeredgecolor="k", alpha=1.0)
+
+    @classmethod
+    def cell(cls, color: str = "k") -> "PlotConfig":
+        return cls(color=color, markersize=3, markeredgecolor="none", alpha=0.4)
+
+    @classmethod
+    def density(cls, color: str = "k") -> "PlotConfig":
+        return cls(color=color, levels=4, sigma=2.0, linewidth=1.0)
+
+    @classmethod
+    def from_cfg(cls, base: "PlotConfig", cfg: dict) -> "PlotConfig":
+        """Override fields from a config dict, ignoring non-PlotConfig keys."""
+        _skip = {"show", "style"}
+        overrides = {k: v for k, v in cfg.items()
+                     if k not in _skip and k in cls.__dataclass_fields__}
+        return cls(**{**asdict(base), **overrides})
+
+    def update(self, cfg: dict) -> "PlotConfig":
+        """Return a new PlotConfig with fields from cfg applied, skipping show/style."""
+        return PlotConfig.from_cfg(self, cfg)
+
+    def scatter_kwargs(self, marker: str) -> dict:
+        return {"color": self.color, "marker": marker,
+                "markersize": self.markersize,
+                "markeredgecolor": self.markeredgecolor,
+                "alpha": self.alpha}
+
+    def contour_kwargs(self) -> dict:
+        return {"color": self.color, "levels": self.levels,
+                "sigma": self.sigma, "linewidth": self.linewidth,
+                "alpha": self.alpha}
 
 
-def _cbar_ax(fig, gs_cell):
+def stereo_field(ax, sigma, kind="dilation", n_strikes=180, n_dips=45,
+                 cmap="jet", vmin=None, vmax=None, cbar_label=None, cbar_kwargs=None):
     """
-    Create a plain axes for a colorbar.
+    Compute and draw a scalar tendency field on an existing stereonet axes.
 
     Parameters
     ----------
-    fig : matplotlib.figure.Figure
-        Figure handle.
-    gs_cell : matplotlib.gridspec.SubplotSpec
-        GridSpec cell.
+    ax : mplstereonet axes
+    sigma : array-like, shape (3, 3)
+        Stress tensor in ENU coordinates.
+    kind : str
+        ``slip`` or ``dilation``.
+    n_strikes, n_dips : int
+        Stereonet discretization (number of cells).
+    cmap : str
+        Colormap name.
+    vmin, vmax : float, optional
+        Color scaling.
+    cbar_label : str, optional
+        Overrides the default colorbar label.
+    cbar_kwargs : dict, optional
+        Extra kwargs forwarded to ``fig.colorbar``.
 
     Returns
     -------
-    matplotlib.axes.Axes
-        Plain axes (no projection) suitable for colorbars.
+    mappable
+        The pcolormesh mappable.
     """
-    return fig.add_subplot(gs_cell)
+    if kind not in _TENDENCY_FNS:
+        raise ValueError(f"kind must be 'slip' or 'dilation', got '{kind}'.")
 
-
-def _plane_grid(n_strikes, n_dips):
-    """
-    Build plane grid (centers) and stereonet node coordinates.
-
-    Parameters
-    ----------
-    n_strikes : int
-        Number of strike bins (cells).
-    n_dips : int
-        Number of dip bins (cells).
-
-    Returns
-    -------
-    planes : numpy.ndarray, shape (n_strikes*n_dips, 2)
-        Plane centers as [strike, dip] (degrees).
-    lon, lat : numpy.ndarray
-        Stereonet pcolormesh nodes as returned by mplstereonet.pole.
-    shape : tuple
-        (n_dips, n_strikes) output shape for reshaping computed values.
-    meshes : tuple
-        (mesh_strikes, mesh_dips) node meshes.
-    """
-    mesh_strikes, mesh_dips = grid_nodes(n_strikes, n_dips)
-    cs, cd = grid_centers(mesh_strikes, mesh_dips)
+    mesh_s, mesh_d = grid_nodes(n_strikes, n_dips)
+    cs, cd = grid_centers(mesh_s, mesh_d)
     planes = np.column_stack([cs.ravel(), cd.ravel()])
-    lon, lat = mpl.pole(mesh_strikes, mesh_dips)
-    return planes, lon, lat, cs.shape, (mesh_strikes, mesh_dips)
+    vals = _TENDENCY_FNS[kind](sigma, planes=planes).reshape(cs.shape)
+    lon, lat = mpl.pole(mesh_s, mesh_d)
+
+    m = ax.pcolormesh(lon, lat, vals, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
+    label = cbar_label if cbar_label is not None else _CBAR_LABELS[kind]
+    ax.get_figure().colorbar(m, ax=ax, label=label, shrink=0.5, **(cbar_kwargs or {}))
+    return m
 
 
-def plot_slip_tendency(
-    sigma,
-    n_strikes=180,
-    n_dips=45,
-    cmap="jet",
-    figsize=(8, 8),
-    grid=True,
-    vmin=None,
-    vmax=None,
-    cbar_label="",
-    cbar_kwargs=None,
-):
+def stereo_line(ax, directions, label=None, **kwargs):
     """
-    Plot slip tendency on a stereonet.
+    Plot one or many line elements on a stereonet axes.
+
+    The label is assigned to the first point only.
 
     Parameters
     ----------
-    sigma : array-like, shape (3, 3)
-        Stress tensor in ENU coordinates.
-    n_strikes, n_dips : int
-        Strike/dip discretization (number of cells).
-    cmap : str
-        Colormap name.
-    figsize : tuple
-        Figure size (inches).
-    grid : bool
-        Show stereonet grid.
-    vmin, vmax : float, optional
-        Color scaling for pcolormesh.
-    cbar_label : str
-        Colorbar label.
-    cbar_kwargs : dict, optional
-        Extra kwargs forwarded to fig.colorbar.
-
-    Returns
-    -------
-    fig, ax, values, meshes, mappable, colorbar
+    ax : mplstereonet axes
+    directions : array-like, shape (2,) or (N, 2)
+        Plunge/azimuth pairs in degrees.
+    label : str, optional
+    **kwargs
+        Forwarded to ``ax.line``.
     """
-    planes, lon, lat, shp, meshes = _plane_grid(n_strikes, n_dips)
-    vals = slip_tendency(sigma, planes=planes).reshape(shp)
-
-    fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 0.07], wspace=0.25)
-
-    ax = _stereo_ax(fig, gs[0, 0], grid=grid)
-    m = ax.pcolormesh(lon, lat, vals, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
-
-    cax = _cbar_ax(fig, gs[0, 1])
-    cb = fig.colorbar(m, cax=cax, **(cbar_kwargs or {}))
-    if cbar_label:
-        cb.set_label(cbar_label)
-
-    return ax, vals, meshes
+    directions = np.atleast_2d(directions)
+    for n, (plunge, azimuth) in enumerate(directions):
+        ax.line(plunge, azimuth, label=label if n == 0 else None, **kwargs)
 
 
-def plot_dilation_tendency(
-    sigma,
-    n_strikes=180,
-    n_dips=45,
-    cmap="jet",
-    figsize=(8, 8),
-    grid=True,
-    vmin=None,
-    vmax=None,
-    cbar_label=r"Dilation Tendency $(\sigma_1-\sigma_n)/(\sigma_1-\sigma_3)$",
-    cbar_kwargs=None,
-):
+def stereo_contour(ax, directions, label=None, color="k", levels=4, sigma=2,
+                   linewidth=1.0, **kwargs):
     """
-    Plot dilation tendency on a stereonet.
+    Plot kernel density contour lines of line elements on a stereonet.
 
     Parameters
     ----------
-    sigma : array-like, shape (3, 3)
-        Stress tensor in ENU coordinates.
-    n_strikes, n_dips : int
-        Strike/dip discretization (number of cells).
-    cmap : str
-        Colormap name.
-    figsize : tuple
-        Figure size (inches).
-    grid : bool
-        Show stereonet grid.
-    vmin, vmax : float, optional
-        Color scaling for pcolormesh.
-    cbar_label : str
-        Colorbar label.
-    cbar_kwargs : dict, optional
-        Extra kwargs forwarded to fig.colorbar.
-
-    Returns
-    -------
-    ax, values, meshes
+    ax : mplstereonet axes
+    directions : array-like, shape (N, 2)
+        Plunge/azimuth pairs in degrees.
+    label : str, optional
+    color : str
+    levels : int
+    sigma : float
+    linewidth : float
+    **kwargs
+        Extra kwargs forwarded to ``ax.density_contour``.
     """
-    planes, lon, lat, shp, meshes = _plane_grid(n_strikes, n_dips)
-    vals = dilation_tendency(sigma, planes=planes).reshape(shp)
-
-    fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 0.07], wspace=0.25)
-
-    ax = _stereo_ax(fig, gs[0, 0], grid=grid)
-    m = ax.pcolormesh(lon, lat, vals, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
-
-    cax = _cbar_ax(fig, gs[0, 1])
-    cb = fig.colorbar(m, cax=cax, **(cbar_kwargs or {}))
-    if cbar_label:
-        cb.set_label(cbar_label)
-
-    return ax, vals, meshes
-
-
-def plot_slip_dilation_tendency(
-    sigma,
-    n_strikes=180,
-    n_dips=45,
-    cmap_slip="rainbow",
-    cmap_dil="jet",
-    figsize=(18, 8),
-    grid=True,
-    vmin_slip=None,
-    vmax_slip=None,
-    vmin_dil=None,
-    vmax_dil=None,
-    cbar_label_slip="",
-    cbar_label_dil="",
-    cbar_kwargs_slip=None,
-    cbar_kwargs_dil=None,
-):
-    """
-    Plot slip and dilation tendency side-by-side on stereonets.
-
-    Notes
-    -----
-    Slip and dilation use different scales, so this function always uses two colorbars.
-
-    Returns
-    -------
-    fig, ax_slip, ax_dil, slip_vals, dil_vals, meshes, m1, cb1, m2, cb2
-    """
-    planes, lon, lat, shp, meshes = _plane_grid(n_strikes, n_dips)
-
-    slip_vals = slip_tendency(sigma, planes=planes).reshape(shp)
-    dil_vals = dilation_tendency(sigma, planes=planes).reshape(shp)
-
-    fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(
-        1, 4,
-        width_ratios=[1.0, 0.07, 1.0, 0.07],
-        wspace=0.35,
-    )
-
-    ax_s = _stereo_ax(fig, gs[0, 0], grid=grid)
-    m1 = ax_s.pcolormesh(
-        lon, lat, slip_vals, cmap=cmap_slip, shading="auto", vmin=vmin_slip, vmax=vmax_slip
-    )
-    cax1 = _cbar_ax(fig, gs[0, 1])
-    cb1 = fig.colorbar(m1, cax=cax1, **(cbar_kwargs_slip or {}))
-    if cbar_label_slip:
-        cb1.set_label(cbar_label_slip)
-
-    ax_d = _stereo_ax(fig, gs[0, 2], grid=grid)
-    m2 = ax_d.pcolormesh(
-        lon, lat, dil_vals, cmap=cmap_dil, shading="auto", vmin=vmin_dil, vmax=vmax_dil
-    )
-    cax2 = _cbar_ax(fig, gs[0, 3])
-    cb2 = fig.colorbar(m2, cax=cax2, **(cbar_kwargs_dil or {}))
-    if cbar_label_dil:
-        cb2.set_label(cbar_label_dil)
-
-    return ax_s, ax_d, slip_vals, dil_vals, meshes
+    directions = np.atleast_2d(directions)
+    ax.density_contour(directions[:, 0], directions[:, 1],
+                       measurement="lines", colors=color,
+                       levels=levels, sigma=sigma,
+                       linewidths=linewidth, **kwargs)
