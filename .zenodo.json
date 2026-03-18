@@ -12,7 +12,7 @@
     "stress analysis",
     "seismology"
   ],
-  "version": "0.1.1",
+  "version": "0.1.3",
   "creators": [
     {
       "name": "Iturrieta, Pablo",
@@ -69,5 +69,6 @@
       "relation": "isSupplementTo",
       "resource_type": "software"
     }
-  ]
+  ],
+    "description": "<p><strong>fem2geo</strong> is a Python library for structural geology and seismology analyses on outputs from finite element (FEM) or boundary element (BEM) numerical models. It loads simulation outputs, extracts regions of interest, computes geomechanical variables (principal stress directions, slip and dilation tendency), and produces stereonet figures. Standard workflows run from a YAML config file; a <code>Model</code> class is available for scripting. Source code and tutorials: <a href=\"https://github.com/pabloitu/fem2geo\">https://github.com/pabloitu/fem2geo</a>.</p>"
 }
