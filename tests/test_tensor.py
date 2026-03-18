@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 
 from fem2geo import transform as tr
-import fem2geo.tensor as tm
+import fem2geo.utils.tensor as tm
 
 
 class TestTensor(unittest.TestCase):

@@ -1,6 +1,6 @@
 import numpy as np
 
-from fem2geo import transform as tr
+from fem2geo.utils import transform as tr
 
 
 __all__ = [

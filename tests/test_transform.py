@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from fem2geo.transform import (
+from fem2geo.utils.transform import (
     enu_to_ned,
     ned_to_enu,
     line_sphe2enu,

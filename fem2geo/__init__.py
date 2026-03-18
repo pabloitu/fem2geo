@@ -1,7 +1,7 @@
-from fem2geo import model_handler
-from fem2geo import tensor
-from fem2geo import transform
+from fem2geo import model
 from fem2geo import plots
+from fem2geo.utils import tensor
+from fem2geo.utils import transform
 
 import os
 
