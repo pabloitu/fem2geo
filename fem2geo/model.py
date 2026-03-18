@@ -344,43 +344,22 @@ class Model:
         d1 = self.dir_s1
         d2 = self.dir_s2
         d3 = self.dir_s3
-        for k in range(n):
-            t[k] = (v1[k] * np.outer(d1[k], d1[k]) +
-                    v2[k] * np.outer(d2[k], d2[k]) +
-                    v3[k] * np.outer(d3[k], d3[k]))
+
+        t = (v1[:, None, None] * (d1[:, :, None] * d1[:, None, :])
+             + v2[:, None, None] * (d2[:, :, None] * d2[:, None, :])
+             + v3[:, None, None] * (d3[:, :, None] * d3[:, None, :]))
         return t
 
     def _extract(self, points_id: set) -> pv.UnstructuredGrid:
-        connectivity = []
-        for c in self._grid.cells_dict.values():
-            connectivity.extend(c.tolist())
+        cell_ids = []
+        for i in range(self._grid.n_cells):
+            cell_point_ids = self._grid.get_cell(i).point_ids
+            if points_id.intersection(cell_point_ids):
+                cell_ids.append(i)
 
-        cells_id = [i for i, j in enumerate(connectivity) if points_id.intersection(j)]
+        log.info(f"Extracted {len(cell_ids)} cells")
 
-        ien_ext = []
-        for i, j in enumerate(connectivity):
-            if i in cells_id:
-                ien_ext.extend(j)
-        points_list = list(set(ien_ext))
-
-        pv_cells = []
-        for i, j in enumerate(connectivity):
-            if i in cells_id:
-                pv_cells.extend([len(j)] + [points_list.index(k) for k in j])
-
-        log.info(f"Extracted {len(cells_id)} cells, {len(points_list)} points")
-
-        if not cells_id:
+        if not cell_ids:
             return pv.UnstructuredGrid()
 
-        grid = pv.UnstructuredGrid(
-            np.array(pv_cells, dtype=np.int64),
-            self._grid.celltypes[cells_id],
-            self._grid.points[points_list],
-        )
-        for k, v in self._grid.cell_data.items():
-            grid.cell_data[k] = v[cells_id]
-        for k, v in self._grid.point_data.items():
-            grid.point_data[k] = v[points_list]
-
-        return grid
+        return self._grid.extract_cells(cell_ids)

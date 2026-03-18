@@ -77,7 +77,6 @@ class ModelSchema:
             If no built-in schema with the given name exists.
         """
         p = Path(__file__).parent / "schemas" / f"{name}.yaml"
-        print(p)
         if not p.exists():
             available = [f.stem for f in (Path(__file__).parent / "schemas").glob("*.yaml")]
             raise ValueError(f"No built-in schema '{name}'. Available: {available}")

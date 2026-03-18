@@ -68,7 +68,7 @@ log = logging.getLogger("fem2geoLogger")
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    # ── Config ────────────────────────────────────────────────────────────────
+    # Config
     schema = ModelSchema.builtin(cfg.get("schema", "adeli"), units=cfg.get("units"))
     zone_cfg = cfg["zone"]
     plot_cfg = cfg.get("plot", {})
@@ -101,20 +101,18 @@ def run(cfg: dict, job_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     colors = MODEL_COLORS[:len(model_paths)]
 
-    # ── Figure ────────────────────────────────────────────────────────────────
+    # Figure
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
 
-    legend_elements = []
-    if len(model_paths) > 1:
-        legend_elements += [
-            Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
-            Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
-            Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
-        ]
+    legend_elements = [
+        Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
+        Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
+        Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
+    ]
 
-    # ── Per-model loop ────────────────────────────────────────────────────────
+    # Per-model loop
     for color, name in zip(colors, model_names):
 
         path = (job_dir / model_paths[name]).resolve()
@@ -160,7 +158,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         if len(model_paths) > 1:
             legend_elements.append(Patch(facecolor=color, edgecolor="k", label=name))
 
-    # ── Finalise ──────────────────────────────────────────────────────────────
+    # Finalise
     if legend_elements:
         ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(title, y=1.08)
@@ -169,4 +167,3 @@ def run(cfg: dict, job_dir: Path) -> None:
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     log.info(f"Saved: {out_path}")
-
