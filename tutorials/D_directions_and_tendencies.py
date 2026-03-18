@@ -5,7 +5,7 @@ import numpy as np
 import pyvista as pv
 
 import fem2geo
-from fem2geo import model_handler as mh
+from fem2geo import model as mh
 from fem2geo import transform as tr
 from fem2geo import plots
 

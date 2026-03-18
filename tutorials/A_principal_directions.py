@@ -6,7 +6,7 @@ import pyvista as pv
 
 import fem2geo
 from fem2geo import transform as tr
-from fem2geo import model_handler
+from fem2geo import model
 ###############################################################################
 # This example illustrates the following
 #   1. Read a .vtk file corresponding the results of an ADELI
@@ -25,7 +25,7 @@ filename = os.path.join(example_dir, 'small_box.vtk')
 
 # Read File with Pyvista
 full_model = pv.read(filename)
-
+print(full_model.array_names)
 
 # =============================================================================
 # Process data
@@ -36,7 +36,7 @@ center = (22, 22, -7)
 radius = 0.8
 
 # Get Sub-model
-sub_model = model_handler.get_submodel_sphere(full_model, center, radius)
+sub_model = model.get_submodel_sphere(full_model, center, radius)
 
 # Save sub_model for visualization as vtu
 sub_model.save(os.path.join(example_dir, 'ex1_circle.vtu'))   # <<<<<<<< Visualize in Paraview

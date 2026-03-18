@@ -11,7 +11,7 @@ import mplstereonet as mpl
 
 import fem2geo
 from fem2geo import transform as tr
-from fem2geo import model_handler as mh
+from fem2geo import model as mh
 
 
 ###############################################################################
