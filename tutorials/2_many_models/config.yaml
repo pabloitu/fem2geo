@@ -1,0 +1,13 @@
+job: principal_directions
+schema: adeli
+
+models:
+  model_a: ../data/model_a.vtu
+  model_b: ../data/model_b.vtu
+  model_c: ../data/model_c.vtu
+  model_d: ../data/model_d.vtu
+
+zone:
+  type: sphere
+  center: [25, 30, -10]
+  radius: 1

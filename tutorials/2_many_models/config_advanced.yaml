@@ -1,0 +1,30 @@
+job: principal_directions
+schema: adeli
+
+models:
+  model_a: ../data/model_a.vtu
+  model_b: ../data/model_b.vtu
+  model_c: ../data/model_c.vtu
+  model_d: ../data/model_d.vtu
+
+zone:
+  type: sphere
+  center: [25, 30, -10]
+  radius: 1
+
+plot:
+  title: "Principal stress directions — model comparison"
+  figsize: [10, 10]
+  dpi: 300
+  avg_directions:
+    show: true
+    markersize: 10
+  cell_directions:
+    show: true
+    style: contour
+    levels: 4
+    sigma: 2
+    linewidth: 1.5
+
+output:
+  save_vtu: false

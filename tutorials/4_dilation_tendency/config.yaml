@@ -1,0 +1,12 @@
+job: tendency_plot
+schema: adeli
+
+model: ../data/cavity_model.vtk
+
+zone:
+  type: sphere
+  center: [24.75, 28.5, -7.3]
+  radius: 1.0
+
+plot:
+  tendency: dilation
