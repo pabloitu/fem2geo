@@ -210,10 +210,8 @@ class Model:
         Model
         """
         center = np.asarray(center)
-        points_id = set(
-            np.where(np.linalg.norm(self._grid.points - center, axis=1) < radius)[0]
-        )
-        return Model(self._extract(points_id), self.schema)
+        mask = np.linalg.norm(self._grid.points - center, axis=1) < radius
+        return Model(self._extract(mask), self.schema)
 
     def extract_box(self, center, dim) -> "Model":
         """
@@ -231,9 +229,8 @@ class Model:
         """
         center, dim = np.asarray(center), np.asarray(dim)
         ll, ur = center - dim / 2.0, center + dim / 2.0
-        inidx = np.all((self._grid.points >= ll) & (self._grid.points <= ur), axis=1)
-        points_id = set(np.where(inidx)[0])
-        return Model(self._extract(points_id), self.schema)
+        mask = np.all((self._grid.points >= ll) & (self._grid.points <= ur), axis=1)
+        return Model(self._extract(mask), self.schema)
 
     # Stress averages
     def avg_principal(self) -> tuple:
@@ -350,16 +347,37 @@ class Model:
              + v3[:, None, None] * (d3[:, :, None] * d3[:, None, :]))
         return t
 
-    def _extract(self, points_id: set) -> pv.UnstructuredGrid:
-        cell_ids = []
-        for i in range(self._grid.n_cells):
-            cell_point_ids = self._grid.get_cell(i).point_ids
-            if points_id.intersection(cell_point_ids):
-                cell_ids.append(i)
+    def _extract(self, point_mask: np.ndarray) -> pv.UnstructuredGrid:
+        """
+        Extract cells that reference at least one flagged point.
+
+        Parameters
+        ----------
+        point_mask : numpy.ndarray, shape (n_points,), dtype bool
+            True for points inside the selection region.
+
+        Returns
+        -------
+        pv.UnstructuredGrid
+        """
+        # VTK connectivity: flat array of point ids per cell
+        conn = self._grid.cell_connectivity
+        offsets = self._grid.offset
+
+        # build per-cell flag: does any point in the cell satisfy the mask?
+        # expand offsets to start/end pairs
+        starts = offsets[:-1]
+        ends = offsets[1:]
+
+        # for each cell, check if any referenced point is flagged
+        # use np.add.reduceat on the mask values looked up through connectivity
+        flagged = point_mask[conn].astype(np.intp)
+        counts = np.add.reduceat(flagged, starts)
+        cell_ids = np.where(counts > 0)[0]
 
         log.info(f"Extracted {len(cell_ids)} cells")
 
-        if not cell_ids:
+        if len(cell_ids) == 0:
             return pv.UnstructuredGrid()
 
         return self._grid.extract_cells(cell_ids)
