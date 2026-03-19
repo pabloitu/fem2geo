@@ -1,4 +1,4 @@
-job: tendency_plot
+ job: tendency_plot
 schema: adeli
 units:
   pressure: MPa
