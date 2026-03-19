@@ -90,7 +90,10 @@ from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
     PlotConfig,
-    stereo_line, stereo_pole, stereo_plane, stereo_arrow,
+    stereo_line,
+    stereo_pole,
+    stereo_plane,
+    stereo_arrow,
 )
 from fem2geo.utils.tensor import resolved_shear_enu
 from fem2geo.utils.transform import line_enu2sphe, line_rake2sphe, slip_enu2rake
@@ -200,7 +203,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         sub.save(out_dir / "extract.vtu")
 
     # average stress tensor
-    avg_stress = sub.avg_dev_stress()
+    avg_stress = sub.avg_tensor("stress")
 
     # load fault datasets
     data_entries = cfg["data"]
@@ -219,7 +222,9 @@ def run(cfg: dict, job_dir: Path) -> None:
         fault_datasets[name] = sd
 
     if not fault_datasets:
-        raise ValueError("No fault datasets found. CSV files must have strike, dip, rake columns.")
+        raise ValueError(
+            "No fault datasets found. CSV files must have strike, dip, rake columns."
+        )
 
     # figure
     fig = plt.figure(figsize=figsize)
@@ -245,28 +250,44 @@ def run(cfg: dict, job_dir: Path) -> None:
             # fault plane
             if show_planes:
                 if plane_style == "planes":
-                    stereo_plane(ax, strike, dip,
-                                 color=plane_color, alpha=plane_alpha,
-                                 linewidth=plane_lw)
+                    stereo_plane(
+                        ax,
+                        strike,
+                        dip,
+                        color=plane_color,
+                        alpha=plane_alpha,
+                        linewidth=plane_lw,
+                    )
                 else:
-                    stereo_pole(ax, strike, dip,
-                                color=plane_color, marker="+",
-                                markersize=6, alpha=plane_alpha)
+                    stereo_pole(
+                        ax,
+                        strike,
+                        dip,
+                        color=plane_color,
+                        marker="+",
+                        markersize=6,
+                        alpha=plane_alpha,
+                    )
 
             # observed slip arrow (signed rake from data)
             from_xy, to_xy = _slip_arrow(strike, dip, rk)
-            stereo_arrow(ax, from_xy, to_xy,
-                         color=obs_color, arrowsize=obs_arrowsize,
-                         linewidth=obs_lw)
+            stereo_arrow(
+                ax, from_xy, to_xy, color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw
+            )
 
             # predicted slip arrow (signed rake from resolved shear traction)
             _, tau_hat = resolved_shear_enu(avg_stress, plane=[strike, dip])
             if np.linalg.norm(tau_hat) > 1e-12:
                 pred_rake = slip_enu2rake(tau_hat, strike, dip)
                 from_xy, to_xy = _slip_arrow(strike, dip, pred_rake)
-                stereo_arrow(ax, from_xy, to_xy,
-                             color=pred_color, arrowsize=pred_arrowsize,
-                             linewidth=pred_lw)
+                stereo_arrow(
+                    ax,
+                    from_xy,
+                    to_xy,
+                    color=pred_color,
+                    arrowsize=pred_arrowsize,
+                    linewidth=pred_lw,
+                )
 
     # average principal directions
     if show_avg:
@@ -281,33 +302,62 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # legend
     legend_elements = [
-        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
-                        color=obs_color, lw=obs_lw, label="Observed slip"),
-        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
-                        color=pred_color, lw=pred_lw, label="Predicted slip"),
+        FancyArrowPatch(
+            (0, 0),
+            (0.02, 0),
+            arrowstyle="->",
+            color=obs_color,
+            lw=obs_lw,
+            label="Observed slip",
+        ),
+        FancyArrowPatch(
+            (0, 0),
+            (0.02, 0),
+            arrowstyle="->",
+            color=pred_color,
+            lw=pred_lw,
+            label="Predicted slip",
+        ),
     ]
     if show_planes:
         if plane_style == "planes":
             legend_elements.append(
-                Line2D([0], [0], color=plane_color, linewidth=plane_lw,
-                       alpha=plane_alpha, label="Fault planes"))
+                Line2D(
+                    [0],
+                    [0],
+                    color=plane_color,
+                    linewidth=plane_lw,
+                    alpha=plane_alpha,
+                    label="Fault planes",
+                )
+            )
         else:
             legend_elements.append(
-                Line2D([0], [0], color=plane_color, linewidth=0,
-                       marker="+", markersize=6, alpha=plane_alpha,
-                       label="Fault poles"))
+                Line2D(
+                    [0],
+                    [0],
+                    color=plane_color,
+                    linewidth=0,
+                    marker="+",
+                    markersize=6,
+                    alpha=plane_alpha,
+                    label="Fault poles",
+                )
+            )
     if show_avg:
-        legend_elements.extend([
-            Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
-            Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
-            Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
-        ])
+        legend_elements.extend(
+            [
+                Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
+                Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
+                Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
+            ]
+        )
 
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(title, y=1.08)
 
     # save
-    out_path = out_dir / "resolved_shear.png"
+    out_path = out_dir / "wallace_bott.png"
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     log.info(f"Saved: {out_path}")

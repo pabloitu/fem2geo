@@ -6,15 +6,18 @@ units:
   velocity:    cm/a
   time:        Ma
 
-fields:
-  # Stress tensor components
-  s_xx:   { field: "Stress_xx(MPa)",  category: pressure }
-  s_yy:   { field: "Stress_yy(MPa)",  category: pressure }
-  s_zz:   { field: "Stress_zz(MPa)",  category: pressure }
-  s_xy:   { field: "Stress_xy(MPa)",  category: pressure }
-  s_yz:   { field: "Stress_yz(MPa)",  category: pressure }
-  s_zx:   { field: "Stress_zx(MPa)",  category: pressure }
+tensors:
+  stress:
+    components:
+      xx: "Stress_xx(MPa)"
+      yy: "Stress_yy(MPa)"
+      zz: "Stress_zz(MPa)"
+      xy: "Stress_xy(MPa)"
+      yz: "Stress_yz(MPa)"
+      zx: "Stress_zx(MPa)"
+    category: pressure
 
+fields:
   # Principal stress magnitudes (deviatoric)
   val_s1: { field: "DevStress_1(MPa)", category: pressure }
   val_s3: { field: "DevStress_3(MPa)", category: pressure }

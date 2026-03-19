@@ -113,17 +113,103 @@ class Model:
                 + v2[:, None, None] * (d2[:, :, None] * d2[:, None, :])
                 + v3[:, None, None] * (d3[:, :, None] * d3[:, None, :]))
 
+    @cached_property
+    def stress_dev(self) -> np.ndarray:
+        """Deviatoric stress tensor, shape (N, 3, 3). Removes ⅓tr(σ)I per cell."""
+        s = self.stress
+        tr = np.trace(s, axis1=1, axis2=2)
+        return s - (tr / 3.0)[:, None, None] * np.eye(3)
+
     # strain
 
     @cached_property
     def strain(self) -> np.ndarray:
-        """Strain tensor, shape (N, 3, 3)."""
+        """Total strain tensor, shape (N, 3, 3)."""
         return self._assemble_tensor("strain")
 
     @cached_property
     def strain_rate(self) -> np.ndarray:
-        """Strain rate tensor, shape (N, 3, 3)."""
+        """Total strain rate tensor, shape (N, 3, 3)."""
         return self._assemble_tensor("strain_rate")
+
+    @cached_property
+    def strain_plastic(self) -> np.ndarray:
+        """
+        Plastic strain tensor, shape (N, 3, 3).
+
+        If the schema declares a ``strain_plastic`` tensor, it is loaded
+        directly. Otherwise, the tensor is reconstructed from the scalar
+        invariants ``plastic_eff`` (deviatoric magnitude) and ``plastic_vol``
+        (volumetric part) assuming **coaxiality** with the stress tensor:
+        the plastic strain principal directions are taken from the stress
+        eigenvectors, and the deviatoric shape is proportional to the
+        stress deviator.
+
+        This assumption holds exactly for isotropic associated flow rules
+        and is a good approximation for non-associated Drucker-Prager /
+        Mohr-Coulomb plasticity.
+        """
+        if self.schema.has_tensor("strain_plastic"):
+            try:
+                return self._assemble_tensor("strain_plastic")
+            except KeyError:
+                log.warning("strain_plastic declared but data missing — "
+                            "falling back to coaxiality reconstruction.")
+        return self._reconstruct_plastic_strain()
+
+    @cached_property
+    def strain_elastic(self) -> np.ndarray:
+        """
+        Elastic strain tensor, shape (N, 3, 3).
+
+        If the schema declares a ``strain_elastic`` tensor, it is loaded
+        directly. Otherwise computed as ``strain - strain_plastic``.
+        """
+        if self.schema.has_tensor("strain_elastic"):
+            try:
+                return self._assemble_tensor("strain_elastic")
+            except KeyError:
+                log.warning("strain_elastic declared but data missing — "
+                            "computing as total - plastic.")
+        return self.strain - self.strain_plastic
+
+    def _reconstruct_plastic_strain(self) -> np.ndarray:
+        """
+        Reconstruct plastic strain tensor from scalar invariants and
+        stress eigenvectors (coaxiality assumption).
+
+        Falls back to a zero tensor if plastic invariants are not
+        available (purely elastic model).
+        """
+        try:
+            eff = self.plastic_eff
+            vol = self.plastic_vol
+        except KeyError:
+            log.info("No plastic strain data — assuming purely elastic.")
+            return np.zeros((self.n_cells, 3, 3))
+
+        if np.all(eff == 0) and np.all(vol == 0):
+            return np.zeros((self.n_cells, 3, 3))
+
+        d1, d2, d3 = self.dir_s1, self.dir_s2, self.dir_s3
+
+        # deviatoric stress eigenvalues for shape
+        s1, s2, s3 = self.val_s1, self.val_s2, self.val_s3
+        dev = np.column_stack([s1, s2, s3])
+
+        # normalize deviatoric shape to unit J2
+        j2_dev = np.sqrt(0.5 * np.sum(dev ** 2, axis=1, keepdims=True))
+        j2_dev = np.where(j2_dev < 1e-30, 1.0, j2_dev)
+        shape = dev / j2_dev
+
+        # scale to plastic_eff magnitude and add volumetric part
+        ep_dev = eff[:, None] * shape
+        ep = ep_dev + (vol / 3.0)[:, None]
+
+        # reconstruct tensor: ε_p = Σ ep_i * (d_i ⊗ d_i)
+        return (ep[:, 0, None, None] * (d1[:, :, None] * d1[:, None, :])
+                + ep[:, 1, None, None] * (d2[:, :, None] * d2[:, None, :])
+                + ep[:, 2, None, None] * (d3[:, :, None] * d3[:, None, :]))
 
     # principal directions
 
@@ -236,6 +322,22 @@ class Model:
     def fluid_pressure(self) -> np.ndarray:
         return self._field("fluid_pressure")
 
+    @cached_property
+    def i1_strain_rate(self) -> np.ndarray:
+        return self._field("i1_strain_rate")
+
+    @cached_property
+    def j2_strain_rate(self) -> np.ndarray:
+        return self._field("j2_strain_rate")
+
+    @cached_property
+    def darcy_vel(self) -> np.ndarray:
+        return self._field("darcy_vel")
+
+    @cached_property
+    def heat_flux(self) -> np.ndarray:
+        return self._field("heat_flux")
+
     # extraction
 
     def extract_sphere(self, center, radius) -> "Model":
@@ -252,30 +354,53 @@ class Model:
                       axis=1)
         return Model(self._extract(mask), self.schema)
 
-    # stress averages
+    # averages
 
-    def avg_principal(self) -> tuple:
-        """Volume-weighted average principal values and directions."""
-        avg = self.avg_dev_stress()
+    def avg_tensor(self, name: str) -> np.ndarray:
+        """
+        Volume-weighted average of a tensor field, shape (3, 3).
+
+        Parameters
+        ----------
+        name : str
+            Any tensor: 'stress', 'stress_dev', 'strain', 'strain_rate',
+            'strain_plastic', 'strain_elastic'.
+        """
+        _PROPS = {
+            "stress": lambda: self.stress,
+            "stress_dev": lambda: self.stress_dev,
+            "strain": lambda: self.strain,
+            "strain_rate": lambda: self.strain_rate,
+            "strain_plastic": lambda: self.strain_plastic,
+            "strain_elastic": lambda: self.strain_elastic,
+        }
+        if name in _PROPS:
+            tensors = _PROPS[name]()
+        else:
+            tensors = self._assemble_tensor(name)
+        return np.einsum("ijk,i->jk", tensors,
+                         self.volumes) / self.volumes.sum()
+
+    def avg_principal(self, name: str = "stress") -> tuple:
+        """
+        Volume-weighted average principal values and directions.
+
+        Parameters
+        ----------
+        name : str
+            Tensor to decompose (default: 'stress').
+
+        Returns
+        -------
+        val : numpy.ndarray, shape (3,)
+            Eigenvalues sorted ascending.
+        vec : numpy.ndarray, shape (3, 3)
+            Eigenvectors as columns in ENU.
+        """
+        avg = self.avg_tensor(name)
         val, vec = np.linalg.eigh(avg)
         order = np.argsort(val)
         return val[order], vec[:, order]
-
-    def avg_dev_stress(self) -> np.ndarray:
-        """Volume-weighted average deviatoric stress, shape (3, 3)."""
-        return np.einsum("ijk,i->jk", self.stress,
-                         self.volumes) / self.volumes.sum()
-
-    def avg_total_stress(self, rho: float = 2800.0,
-                         g: float = 9.81) -> np.ndarray:
-        """Volume-weighted average total stress (adds lithostatic)."""
-        tensors = self.stress.copy()
-        p = rho * g * self.cell_centers[:, 2] * -1000.0 / 1e6
-        tensors[:, 0, 0] += p
-        tensors[:, 1, 1] += p
-        tensors[:, 2, 2] += p
-        return np.einsum("ijk,i->jk", tensors,
-                         self.volumes) / self.volumes.sum()
 
     # persistence
 
