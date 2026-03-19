@@ -1,0 +1,37 @@
+job: resolved_shear
+schema: adeli
+
+model: ../data/model_a.vtu
+
+zone:
+  type: sphere
+  center: [20, 20, -10]
+  radius: 0.5
+
+data:
+  faults:
+    file: ../data/faults.csv
+
+plot:
+  title: "Resolved Shear Stress — observed vs predicted slip"
+  figsize: [9, 9]
+  dpi: 300
+  fault_planes:
+    show: true
+    style: poles
+    color: "grey"
+    alpha: 0.6
+  observed_slip:
+    color: "#E63946"
+    marker: "o"
+    markersize: 7
+  predicted_slip:
+    color: "#2196F3"
+    marker: "d"
+    markersize: 7
+  avg_directions:
+    show: true
+    markersize: 10
+
+output:
+  save_vtu: false
