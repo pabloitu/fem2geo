@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -10,11 +10,25 @@ SI_FACTORS: dict[str, float] = {
     "m/s": 1.0,     "cm/a": 1e-2 / 3.156e7,
     "k":  1.0,      "c":   1.0,
     "s":  1.0,      "ma":  3.156e13,
+    "pa.s": 1.0,    "1/s": 1.0,     "mw/m2": 1e-3,
 }
 
 
+def _resolve_unit(category, active_units):
+    """Return (unit_str, si_factor) for a category, or (None, None)."""
+    if not category:
+        return None, None
+    unit = active_units.get(category)
+    if not unit:
+        return None, None
+    return unit, SI_FACTORS.get(unit.lower())
+
+
+# entries
+
 @dataclass
-class FieldEntry:
+class ScalarEntry:
+    """Mapping for a scalar or vector field (one array in the file)."""
     canonical:  str
     solver_key: str
     category:   Optional[str]   = None
@@ -23,71 +37,100 @@ class FieldEntry:
 
 
 @dataclass
+class TensorEntry:
+    """
+    Mapping for a symmetric 3x3 tensor.
+
+    Exactly one of ``voigt6`` or ``components`` must be set:
+
+    - ``voigt6``: solver array name for a single (N, 6) packed array,
+      Voigt order [xx, yy, zz, xy, yz, zx].
+    - ``components``: dict mapping component labels (xx, yy, zz, xy, yz, zx)
+      to their solver array names.
+    """
+    canonical:  str
+    voigt6:     Optional[str]            = None
+    components: Optional[dict[str, str]] = None
+    category:   Optional[str]            = None
+    unit:       Optional[str]            = None
+    si_factor:  Optional[float]          = None
+
+    @property
+    def is_packed(self) -> bool:
+        return self.voigt6 is not None
+
+
+# schema
+
+@dataclass
 class ModelSchema:
     """
-    Maps canonical fem2geo field names to solver-specific array names and units.
+    Maps canonical fem2geo names to solver-specific array names and units.
 
-    Parameters
-    ----------
-    name : str
-        Solver identifier.
-    fields : dict[str, FieldEntry]
-        Canonical field name to entry mapping.
+    ``fields`` holds scalar and vector mappings (one array each).
+    ``tensors`` holds symmetric tensor mappings (packed or component-wise).
     """
-    name:   str
-    fields: dict[str, FieldEntry]
+    name:    str
+    fields:  dict[str, ScalarEntry]
+    tensors: dict[str, TensorEntry] = field(default_factory=dict)
+
+    # constructors
 
     @classmethod
-    def _from_raw(cls, raw: dict, unit_overrides: Optional[dict] = None) -> "ModelSchema":
+    def _from_raw(cls, raw: dict,
+                  unit_overrides: Optional[dict] = None) -> "ModelSchema":
         active_units = {**raw.get("units", {}), **(unit_overrides or {})}
+
         fields = {}
         for canonical, spec in raw.get("fields", {}).items():
             solver_key = spec["field"] if isinstance(spec, dict) else spec
-            category   = spec.get("category") if isinstance(spec, dict) else None
-            unit       = active_units.get(category) if category else None
-            si_factor  = SI_FACTORS.get(unit.lower()) if unit else None
-            fields[canonical] = FieldEntry(canonical, solver_key, category, unit, si_factor)
-        return cls(name=raw.get("solver", "custom"), fields=fields)
+            category = spec.get("category") if isinstance(spec, dict) else None
+            unit, si = _resolve_unit(category, active_units)
+            fields[canonical] = ScalarEntry(canonical, solver_key, category,
+                                            unit, si)
+
+        tensors = {}
+        for canonical, spec in raw.get("tensors", {}).items():
+            category = spec.get("category")
+            unit, si = _resolve_unit(category, active_units)
+            tensors[canonical] = TensorEntry(
+                canonical=canonical,
+                voigt6=spec.get("voigt6"),
+                components=spec.get("components"),
+                category=category, unit=unit, si_factor=si,
+            )
+
+        return cls(name=raw.get("solver", "custom"), fields=fields,
+                   tensors=tensors)
 
     @classmethod
-    def from_dict(cls, d: dict, units: Optional[dict] = None) -> "ModelSchema":
+    def from_dict(cls, d: dict,
+                  units: Optional[dict] = None) -> "ModelSchema":
         return cls._from_raw(d, unit_overrides=units)
 
     @classmethod
-    def from_yaml(cls, path, units: Optional[dict] = None) -> "ModelSchema":
+    def from_yaml(cls, path,
+                  units: Optional[dict] = None) -> "ModelSchema":
         with open(path) as f:
             raw = yaml.safe_load(f)
         return cls._from_raw(raw, unit_overrides=units)
 
     @classmethod
-    def builtin(cls, name: str, units: Optional[dict] = None) -> "ModelSchema":
-        """
-        Load a schema shipped with the package.
-
-        Parameters
-        ----------
-        name : str
-            Schema name, e.g. ``"adeli"``.
-        units : dict, optional
-            Category-level unit overrides, e.g. ``{"pressure": "Pa"}``.
-
-        Raises
-        ------
-        ValueError
-            If no built-in schema with the given name exists.
-        """
+    def builtin(cls, name: str,
+                units: Optional[dict] = None) -> "ModelSchema":
+        """Load a built-in schema by name (e.g. ``"adeli"``)."""
         p = Path(__file__).parent / "schemas" / f"{name}.yaml"
         if not p.exists():
-            available = [f.stem for f in (Path(__file__).parent / "schemas").glob("*.yaml")]
-            raise ValueError(f"No built-in schema '{name}'. Available: {available}")
+            available = [f.stem for f in
+                         (Path(__file__).parent / "schemas").glob("*.yaml")]
+            raise ValueError(
+                f"No built-in schema '{name}'. Available: {available}")
         return cls.from_yaml(p, units=units)
 
-    def solver_key(self, canonical: str) -> str:
-        return self.fields[canonical].solver_key
-
-    def si_factor(self, canonical: str) -> float:
-        entry = self.fields.get(canonical)
-        return entry.si_factor if (entry and entry.si_factor) else 1.0
+    # queries
 
     def has(self, canonical: str) -> bool:
         return canonical in self.fields
+
+    def has_tensor(self, canonical: str) -> bool:
+        return canonical in self.tensors

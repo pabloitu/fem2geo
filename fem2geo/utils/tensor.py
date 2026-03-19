@@ -4,6 +4,8 @@ from fem2geo.utils import transform as tr
 
 
 __all__ = [
+    "unpack_voigt6",
+    "unpack_components",
     "rot_matrix",
     "rot_tensor",
     "normals_from_planes",
@@ -11,9 +13,66 @@ __all__ = [
     "resolved_shear_enu",
     "slip_tendency",
     "dilation_tendency",
+    "kostrov_tensor",
     "grid_nodes",
     "grid_centers",
 ]
+
+# Voigt ordering: [xx, yy, zz, xy, yz, zx] -> (i, j) symmetric tensor
+_VOIGT_MAP = [(0, 0), (1, 1), (2, 2), (0, 1), (1, 2), (0, 2)]
+
+# component label -> (i, j)
+_COMP_IDX = {
+    "xx": (0, 0), "yy": (1, 1), "zz": (2, 2),
+    "xy": (0, 1), "yz": (1, 2), "zx": (0, 2),
+}
+
+
+def unpack_voigt6(packed):
+    """
+    Unpack (N, 6) Voigt-ordered array into (N, 3, 3) symmetric tensors.
+
+    Voigt ordering: [xx, yy, zz, xy, yz, zx].
+
+    Parameters
+    ----------
+    packed : array-like, shape (N, 6)
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3, 3)
+    """
+    packed = np.asarray(packed, dtype=float)
+    n = packed.shape[0]
+    t = np.zeros((n, 3, 3))
+    for col, (i, j) in enumerate(_VOIGT_MAP):
+        t[:, i, j] = packed[:, col]
+        t[:, j, i] = packed[:, col]
+    return t
+
+
+def unpack_components(arrays):
+    """
+    Assemble (N, 3, 3) symmetric tensors from a dict of component arrays.
+
+    Parameters
+    ----------
+    arrays : dict[str, array-like]
+        Maps component labels (xx, yy, zz, xy, yz, zx) to (N,) arrays.
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3, 3)
+    """
+    first = next(iter(arrays.values()))
+    n = len(np.asarray(first))
+    t = np.zeros((n, 3, 3))
+    for comp, arr in arrays.items():
+        i, j = _COMP_IDX[comp]
+        arr = np.asarray(arr, dtype=float)
+        t[:, i, j] = arr
+        t[:, j, i] = arr
+    return t
 
 
 def rot_matrix(angle, axis):
@@ -333,6 +392,54 @@ def dilation_tendency(sigma, planes=None, normals=None, eps=1e-12):
         out = (s1 - sigma_n) / denom
 
     return float(out[0]) if scalar else out
+
+
+def kostrov_tensor(strikes, dips, rakes):
+    """
+    Compute the Kostrov (1974) summed moment tensor from a fault population.
+
+    Each fault contributes a symmetric dyad ``½(s⊗n + n⊗s)`` where ``s``
+    is the unit slip vector (directed, from signed rake) and ``n`` is the
+    unit fault plane normal. The sum over all faults gives a symmetric
+    tensor whose eigenvectors are the bulk kinematic axes of the fault
+    population (shortening, intermediate, extension).
+
+    All faults are weighted equally (unit potency).
+
+    Parameters
+    ----------
+    strikes : array-like, shape (N,)
+        Strike in degrees (right-hand rule).
+    dips : array-like, shape (N,)
+        Dip in degrees.
+    rakes : array-like, shape (N,)
+        Signed rake in degrees (Aki & Richards, (-180, 180]).
+
+    Returns
+    -------
+    numpy.ndarray, shape (3, 3)
+        Symmetric Kostrov tensor in ENU coordinates.
+    """
+    strikes = np.asarray(strikes, dtype=float)
+    dips = np.asarray(dips, dtype=float)
+    rakes = np.asarray(rakes, dtype=float)
+
+    # slip vectors: directed ENU, shape (N, 3)
+    slips = tr.slip_rake2enu(strikes, dips, rakes)
+    if slips.ndim == 1:
+        slips = slips[None, :]
+
+    # fault normals: ENU, shape (N, 3)
+    normals = tr.plane_sphe2enu(strikes, dips)
+    if normals.ndim == 1:
+        normals = normals[None, :]
+
+    # Kostrov sum: ½ Σ (s⊗n + n⊗s)
+    # s⊗n has components s_i * n_j, so s⊗n + n⊗s = s_i*n_j + n_i*s_j
+    K = np.einsum("ki,kj->ij", slips, normals) + np.einsum("ki,kj->ij", normals, slips)
+    K *= 0.5
+
+    return K
 
 
 def grid_nodes(n_strikes, n_dips):

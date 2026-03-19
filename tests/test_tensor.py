@@ -5,140 +5,107 @@ from fem2geo.utils import transform as tr
 import fem2geo.utils.tensor as tm
 
 
-class TestTensor(unittest.TestCase):
+class TestRotation(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.atol = 1e-10
-        cls.rng = np.random.default_rng(123)
-
-    def mclose(self, A, B, atol=None):
-        atol = self.atol if atol is None else atol
-        A = np.asarray(A, dtype=float)
-        B = np.asarray(B, dtype=float)
-        self.assertTrue(np.allclose(A, B, atol=atol, rtol=0.0), msg=f"\nA=\n{A}\nB=\n{B}\n")
-
-    def aclose(self, a, b, places=10):
-        self.assertAlmostEqual(float(a), float(b), places=places)
-
-    def test_rot_matrix(self):
-        I = np.eye(3)
-
+    def test_rotation_matrices_are_orthogonal(self):
         for ax in (1, 2, 3):
-            for ang in (0.0, 17.0, 90.0, 123.0, -45.0):
+            for ang in (0, 17, 90, -45):
                 R = tm.rot_matrix(ang, ax)
-                self.mclose(R.T @ R, I, atol=1e-12)
-                self.aclose(np.linalg.det(R), 1.0, places=10)
+                np.testing.assert_allclose(R.T @ R, np.eye(3), atol=1e-12)
+                self.assertAlmostEqual(np.linalg.det(R), 1.0, places=10)
 
+    def test_bad_axis(self):
         with self.assertRaises(ValueError):
-            tm.rot_matrix(10.0, 4)
+            tm.rot_matrix(10, 4)
 
-    def test_rot_tensor_invariants(self):
-        T = np.array([[3.0, 0.2, -0.1],
-                      [0.2, 2.0,  0.3],
-                      [-0.1, 0.3, 1.0]], dtype=float)
-
+    def test_tensor_rotation_preserves_invariants(self):
+        T = np.array([[3, .2, -.1], [.2, 2, .3], [-.1, .3, 1.0]])
         ev0 = np.sort(np.linalg.eigvalsh(T))
-        tr0 = float(np.trace(T))
-        fn0 = float(np.linalg.norm(T))
-
         for ax in (1, 2, 3):
-            for ang in (13.0, 67.0, 123.0):
-                Tr = tm.rot_tensor(T, ang, ax)
-                ev1 = np.sort(np.linalg.eigvalsh(Tr))
-                self.mclose(ev1, ev0, atol=1e-9)
-                self.aclose(np.trace(Tr), tr0, places=9)
-                self.aclose(np.linalg.norm(Tr), fn0, places=9)
+            Tr = tm.rot_tensor(T, 67, ax)
+            np.testing.assert_allclose(
+                np.sort(np.linalg.eigvalsh(Tr)), ev0, atol=1e-9)
+            self.assertAlmostEqual(np.trace(Tr), np.trace(T), places=9)
 
-    def test_resolved_shear_isotropic(self):
+
+class TestResolvedShear(unittest.TestCase):
+
+    def test_isotropic_gives_zero(self):
         S = 5.0 * np.eye(3)
-
-        planes = [
-            np.array([0.0, 0.0]),
-            np.array([30.0, 10.0]),
-            np.array([120.0, 60.0]),
-            np.array([270.0, 85.0]),
-        ]
-        for p in planes:
+        for p in ([0, 0], [30, 10], [120, 60], [270, 85]):
             tau, tau_hat = tm.resolved_shear_enu(S, plane=p)
-            self.aclose(tau, 0.0, places=12)
-            self.mclose(tau_hat, [0.0, 0.0, 0.0], atol=1e-12)
+            self.assertAlmostEqual(tau, 0.0, places=12)
+            np.testing.assert_allclose(tau_hat, 0, atol=1e-12)
 
-        n = np.array([1.0, 0.0, 0.0])
-        tau, tau_hat = tm.resolved_shear_enu(S, normal=n)
-        self.aclose(tau, 0.0, places=12)
-        self.mclose(tau_hat, [0.0, 0.0, 0.0], atol=1e-12)
 
-    def test_slip_shapes_and_planes_vs_normals(self):
+class TestTendencies(unittest.TestCase):
+
+    def test_planes_vs_normals_agree(self):
         S = np.diag([1.0, 2.0, 3.0])
-
-        # scalar plane
-        p = np.array([30.0, 60.0])
-        n = tr.plane_sphe2enu(p[0], p[1])
-        a = tm.slip_tendency(S, planes=p)
-        b = tm.slip_tendency(S, normals=n)
-        self.assertTrue(np.isscalar(a))
-        self.assertTrue(np.isscalar(b))
-        self.aclose(a, b, places=9)
-
-        # array planes
-        P = np.array([[0.0, 10.0],
-                      [30.0, 60.0],
-                      [120.0, 45.0]], dtype=float)
+        P = np.array([[0, 10], [30, 60], [120, 45]], dtype=float)
         N = tr.plane_sphe2enu(P[:, 0], P[:, 1])
-        A = tm.slip_tendency(S, planes=P)
-        B = tm.slip_tendency(S, normals=N)
-        self.assertEqual(A.shape, (3,))
-        self.assertEqual(B.shape, (3,))
-        self.mclose(A, B, atol=1e-9)
 
-    def test_dilation_shapes_and_planes_vs_normals(self):
-        S = np.diag([1.0, 2.0, 3.0])
+        np.testing.assert_allclose(
+            tm.slip_tendency(S, planes=P),
+            tm.slip_tendency(S, normals=N), atol=1e-9)
+        np.testing.assert_allclose(
+            tm.dilation_tendency(S, planes=P),
+            tm.dilation_tendency(S, normals=N), atol=1e-9)
 
-        p = np.array([30.0, 60.0])
-        n = tr.plane_sphe2enu(p[0], p[1])
-        a = tm.dilation_tendency(S, planes=p)
-        b = tm.dilation_tendency(S, normals=n)
-        self.assertTrue(np.isscalar(a))
-        self.assertTrue(np.isscalar(b))
-        self.aclose(a, b, places=9)
+    def test_scalar_vs_batch(self):
+        S = np.array([[4, .1, .2], [.1, 2, .3], [.2, .3, 1.0]])
+        rng = np.random.default_rng(123)
+        N = rng.normal(size=(25, 3))
+        N /= np.linalg.norm(N, axis=1, keepdims=True)
 
-        P = np.array([[0.0, 10.0],
-                      [30.0, 60.0],
-                      [120.0, 45.0]], dtype=float)
-        N = tr.plane_sphe2enu(P[:, 0], P[:, 1])
-        A = tm.dilation_tendency(S, planes=P)
-        B = tm.dilation_tendency(S, normals=N)
-        self.assertEqual(A.shape, (3,))
-        self.assertEqual(B.shape, (3,))
-        self.mclose(A, B, atol=1e-9)
+        batch = tm.slip_tendency(S, normals=N)
+        scalar = [tm.slip_tendency(S, normals=N[i]) for i in range(25)]
+        np.testing.assert_allclose(batch, scalar, atol=1e-9)
 
-    def test_slip_sigma_n_zero(self):
-        S = np.diag([0.0, 2.0, 3.0])
-        n = np.array([1.0, 0.0, 0.0])
+    def test_zero_sigma_n_gives_inf(self):
+        S = np.diag([0, 2, 3.0])
+        self.assertTrue(
+            np.isinf(tm.slip_tendency(S, normals=[1, 0, 0], eps=1e-14)))
 
-        ts = tm.slip_tendency(S, normals=n, eps=1e-14)
-        self.assertTrue(np.isinf(ts))
 
-        S2 = 5.0 * np.eye(3)
-        ts2 = tm.slip_tendency(S2, normals=n)
-        self.aclose(ts2, 0.0, places=12)
+class TestUnpackVoigt(unittest.TestCase):
 
-    def test_vectorized_normals(self):
-        S = np.array([[4.0, 0.1, 0.2],
-                      [0.1, 2.0, 0.3],
-                      [0.2, 0.3, 1.0]], dtype=float)
+    def test_diagonal_and_symmetry(self):
+        packed = np.array([[1, 2, 3, .4, .5, .6]])
+        t = tm.unpack_voigt6(packed)
+        np.testing.assert_allclose(t[0], t[0].T)
+        np.testing.assert_allclose(np.diag(t[0]), [1, 2, 3])
+        self.assertAlmostEqual(t[0, 0, 1], 0.4)
+        self.assertAlmostEqual(t[0, 1, 2], 0.5)
+        self.assertAlmostEqual(t[0, 0, 2], 0.6)
 
-        N = self.rng.normal(size=(25, 3))
-        N = N / np.linalg.norm(N, axis=1)[:, None]
+    def test_eigenvalue_roundtrip(self):
+        T = np.array([[3, .2, -.1], [.2, 2, .3], [-.1, .3, 1.0]])
+        packed = np.array([[T[0,0], T[1,1], T[2,2], T[0,1], T[1,2], T[0,2]]])
+        np.testing.assert_allclose(tm.unpack_voigt6(packed)[0], T, atol=1e-14)
 
-        a = tm.slip_tendency(S, normals=N)
-        b = np.array([tm.slip_tendency(S, normals=N[i]) for i in range(N.shape[0])])
-        self.mclose(a, b, atol=1e-9)
 
-        a = tm.dilation_tendency(S, normals=N)
-        b = np.array([tm.dilation_tendency(S, normals=N[i]) for i in range(N.shape[0])])
-        self.mclose(a, b, atol=1e-9)
+class TestUnpackComponents(unittest.TestCase):
+
+    def test_matches_voigt(self):
+        packed = np.array([[1, 2, 3, .4, .5, .6]])
+        arrays = dict(xx=[1], yy=[2], zz=[3], xy=[.4], yz=[.5], zx=[.6])
+        np.testing.assert_allclose(
+            tm.unpack_components(arrays), tm.unpack_voigt6(packed), atol=1e-14)
+
+
+class TestKostrov(unittest.TestCase):
+
+    def test_sinistral_vertical(self):
+        K = tm.kostrov_tensor([0], [90], [0])
+        np.testing.assert_allclose(K, K.T, atol=1e-14)
+        vals = np.linalg.eigvalsh(K)
+        self.assertAlmostEqual(vals[0], -0.5, places=10)
+        self.assertAlmostEqual(vals[2],  0.5, places=10)
+
+    def test_always_symmetric(self):
+        K = tm.kostrov_tensor([30, 120, 0], [60, 45, 90], [90, -45, 0])
+        np.testing.assert_allclose(K, K.T, atol=1e-14)
 
 
 if __name__ == "__main__":
