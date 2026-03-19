@@ -162,28 +162,31 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # ── Cell directions (model spread) ────────────────────────────────────────
     if show_cell:
-        s1 = np.array([line_enu2sphe(v) for v in sub.dir_s1])
-        s2 = np.array([line_enu2sphe(v) for v in sub.dir_s2])
-        s3 = np.array([line_enu2sphe(v) for v in sub.dir_s3])
+        p1, a1 = line_enu2sphe(sub.dir_s1)
+        p2, a2 = line_enu2sphe(sub.dir_s2)
+        p3, a3 = line_enu2sphe(sub.dir_s3)
         cell_pc = cell_style_cfg
 
         if cell_style == "contour":
-            stereo_contour(ax, s1, **cell_pc.contour_kwargs())
-            stereo_contour(ax, s2, **cell_pc.contour_kwargs())
-            stereo_contour(ax, s3, **cell_pc.contour_kwargs())
+            stereo_contour(ax, p1, a1, **cell_pc.contour_kwargs())
+            stereo_contour(ax, p2, a2, **cell_pc.contour_kwargs())
+            stereo_contour(ax, p3, a3, **cell_pc.contour_kwargs())
         else:
-            stereo_line(ax, s1, **cell_pc.scatter_kwargs("o"))
-            stereo_line(ax, s2, **cell_pc.scatter_kwargs("s"))
-            stereo_line(ax, s3, **cell_pc.scatter_kwargs("v"))
+            stereo_line(ax, p1, a1, **cell_pc.scatter_kwargs("o"))
+            stereo_line(ax, p2, a2, **cell_pc.scatter_kwargs("s"))
+            stereo_line(ax, p3, a3, **cell_pc.scatter_kwargs("v"))
 
     # ── Average principal directions ──────────────────────────────────────────
     if show_avg:
         _, vec = sub.avg_principal()
-        stereo_line(ax, line_enu2sphe(vec[:, 0]), label=r"$\sigma_1$",
+        p1, a1 = line_enu2sphe(vec[:, 0])
+        p2, a2 = line_enu2sphe(vec[:, 1])
+        p3, a3 = line_enu2sphe(vec[:, 2])
+        stereo_line(ax, p1, a1, label=r"$\sigma_1$",
                     **avg_style.scatter_kwargs("o"))
-        stereo_line(ax, line_enu2sphe(vec[:, 1]), label=r"$\sigma_2$",
+        stereo_line(ax, p2, a2, label=r"$\sigma_2$",
                     **avg_style.scatter_kwargs("s"))
-        stereo_line(ax, line_enu2sphe(vec[:, 2]), label=r"$\sigma_3$",
+        stereo_line(ax, p3, a3, label=r"$\sigma_3$",
                     **avg_style.scatter_kwargs("v"))
 
     # ── Fracture datasets (poles) ─────────────────────────────────────────────

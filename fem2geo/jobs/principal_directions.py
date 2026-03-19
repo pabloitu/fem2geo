@@ -130,30 +130,34 @@ def run(cfg: dict, job_dir: Path) -> None:
         if save_vtu:
             model.save(out_dir / f"{name}_extract.vtu")
 
-        # Cell directions
+        # Cell directions (batched — single call per principal direction)
         if show_cell:
-            s1 = np.array([line_enu2sphe(v) for v in model.dir_s1])
-            s2 = np.array([line_enu2sphe(v) for v in model.dir_s2])
-            s3 = np.array([line_enu2sphe(v) for v in model.dir_s3])
+            p1, a1 = line_enu2sphe(model.dir_s1)
+            p2, a2 = line_enu2sphe(model.dir_s2)
+            p3, a3 = line_enu2sphe(model.dir_s3)
             cell_pc = PlotConfig.from_cfg(cell_style_cfg, {"color": color})
 
             if cell_style == "contour":
-                stereo_contour(ax, s1, **cell_pc.contour_kwargs())
-                stereo_contour(ax, s2, **cell_pc.contour_kwargs())
-                stereo_contour(ax, s3, **cell_pc.contour_kwargs())
+                stereo_contour(ax, p1, a1, **cell_pc.contour_kwargs())
+                stereo_contour(ax, p2, a2, **cell_pc.contour_kwargs())
+                stereo_contour(ax, p3, a3, **cell_pc.contour_kwargs())
             else:
-                stereo_line(ax, s1, **cell_pc.scatter_kwargs("o"))
-                stereo_line(ax, s2, **cell_pc.scatter_kwargs("s"))
-                stereo_line(ax, s3, **cell_pc.scatter_kwargs("v"))
+                stereo_line(ax, p1, a1, **cell_pc.scatter_kwargs("o"))
+                stereo_line(ax, p2, a2, **cell_pc.scatter_kwargs("s"))
+                stereo_line(ax, p3, a3, **cell_pc.scatter_kwargs("v"))
 
         # Average stress principal directions
         if show_avg:
             _, vec = model.avg_principal()
             avg_pc = PlotConfig.from_cfg(avg_style, {"color": color})
             label = name if len(model_paths) > 1 else None
-            stereo_line(ax, line_enu2sphe(vec[:, 0]), label=label, **avg_pc.scatter_kwargs("o"))
-            stereo_line(ax, line_enu2sphe(vec[:, 1]), **avg_pc.scatter_kwargs("s"))
-            stereo_line(ax, line_enu2sphe(vec[:, 2]), **avg_pc.scatter_kwargs("v"))
+
+            p1, a1 = line_enu2sphe(vec[:, 0])
+            p2, a2 = line_enu2sphe(vec[:, 1])
+            p3, a3 = line_enu2sphe(vec[:, 2])
+            stereo_line(ax, p1, a1, label=label, **avg_pc.scatter_kwargs("o"))
+            stereo_line(ax, p2, a2, **avg_pc.scatter_kwargs("s"))
+            stereo_line(ax, p3, a3, **avg_pc.scatter_kwargs("v"))
 
         if len(model_paths) > 1:
             legend_elements.append(Patch(facecolor=color, edgecolor="k", label=name))

@@ -132,36 +132,161 @@ def stereo_field(ax, sigma, kind="dilation", n_strikes=180, n_dips=45,
     return m
 
 
-def stereo_line(ax, directions, label=None, **kwargs):
+def stereo_line(ax, plunge, azimuth=None, label=None, **kwargs):
     """
     Plot one or many line elements on a stereonet axes.
 
-    The label is assigned to the first point only.
+    Accepts either separate arrays or a packed (N, 2) array for
+    backward compatibility.
 
     Parameters
     ----------
     ax : mplstereonet axes
-    directions : array-like, shape (2,) or (N, 2)
-        Plunge/azimuth pairs in degrees.
+    plunge : float, array-like shape (N,), or array-like shape (N, 2)
+        Plunge in degrees. If shape (N, 2) and ``azimuth`` is None,
+        interpreted as packed [plunge, azimuth] pairs.
+    azimuth : float or array-like shape (N,), optional
+        Azimuth in degrees. Required unless ``plunge`` is packed.
     label : str, optional
     **kwargs
         Forwarded to ``ax.line``.
     """
-    directions = np.atleast_2d(directions)
-    for n, (plunge, azimuth) in enumerate(directions):
-        ax.line(plunge, azimuth, label=label if n == 0 else None, **kwargs)
+    plunge = np.asarray(plunge, dtype=float)
+    if azimuth is None:
+        if plunge.ndim == 0:
+            raise ValueError("azimuth is required for scalar plunge.")
+        packed = np.atleast_2d(plunge)
+        plunge, azimuth = packed[:, 0], packed[:, 1]
+    else:
+        azimuth = np.asarray(azimuth, dtype=float)
+        plunge = np.atleast_1d(plunge)
+        azimuth = np.atleast_1d(azimuth)
+
+    ax.line(plunge, azimuth, label=label, **kwargs)
 
 
-def stereo_contour(ax, directions, label=None, color="k", levels=4, sigma=2,
-                   linewidth=1.0, **kwargs):
+def stereo_pole(ax, strike, dip=None, label=None, **kwargs):
     """
-    Plot kernel density contour lines of line elements on a stereonet.
+    Plot poles to planes on a stereonet axes.
+
+    Accepts either separate arrays or a packed (N, 2) array for
+    backward compatibility.
 
     Parameters
     ----------
     ax : mplstereonet axes
-    directions : array-like, shape (N, 2)
-        Plunge/azimuth pairs in degrees.
+    strike : float, array-like shape (N,), or array-like shape (N, 2)
+        Strike in degrees. If shape (N, 2) and ``dip`` is None,
+        interpreted as packed [strike, dip] pairs.
+    dip : float or array-like shape (N,), optional
+        Dip in degrees. Required unless ``strike`` is packed.
+    label : str, optional
+        Label assigned to the plotted set (legend-safe).
+    **kwargs
+        Forwarded to ``ax.pole``.
+    """
+    strike = np.asarray(strike, dtype=float)
+    if dip is None:
+        if strike.ndim == 0:
+            raise ValueError("dip is required for scalar strike.")
+        packed = np.atleast_2d(strike)
+        strike, dip = packed[:, 0], packed[:, 1]
+    else:
+        dip = np.asarray(dip, dtype=float)
+        strike = np.atleast_1d(strike)
+        dip = np.atleast_1d(dip)
+
+    ax.pole(strike, dip, label=label, **kwargs)
+
+
+def stereo_plane(ax, strike, dip=None, label=None, **kwargs):
+    """
+    Plot great circles (fault/fracture planes) on a stereonet axes.
+
+    Accepts either separate arrays or a packed (N, 2) array for
+    backward compatibility.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    strike : float, array-like shape (N,), or array-like shape (N, 2)
+        Strike in degrees. If shape (N, 2) and ``dip`` is None,
+        interpreted as packed [strike, dip] pairs.
+    dip : float or array-like shape (N,), optional
+        Dip in degrees. Required unless ``strike`` is packed.
+    label : str, optional
+        Label assigned to the first plane only (legend-safe).
+    **kwargs
+        Forwarded to ``ax.plane``.
+    """
+    strike = np.asarray(strike, dtype=float)
+    if dip is None:
+        if strike.ndim == 0:
+            raise ValueError("dip is required for scalar strike.")
+        packed = np.atleast_2d(strike)
+        strike, dip = packed[:, 0], packed[:, 1]
+    else:
+        dip = np.asarray(dip, dtype=float)
+        strike = np.atleast_1d(strike)
+        dip = np.atleast_1d(dip)
+
+    # great circles must be drawn individually (mplstereonet draws one arc per call)
+    for n in range(len(strike)):
+        ax.plane(strike[n], dip[n], label=label if n == 0 else None, **kwargs)
+
+
+def stereo_arrow(ax, from_xy, to_xy,
+                 color="k", arrowsize=1.0, linewidth=1.0, alpha=1.0,
+                 label=None, **kwargs):
+    """
+    Plot a directed arrow on a stereonet between two projected points.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    from_xy : tuple of float
+        Arrow tail (x, y) in projected stereonet coordinates.
+    to_xy : tuple of float
+        Arrow head (x, y) in projected stereonet coordinates.
+    color : str
+    arrowsize : float
+        Scale factor for the arrowhead.
+    linewidth : float
+    alpha : float
+    label : str, optional
+    **kwargs
+        Extra kwargs forwarded to ``ax.annotate``.
+    """
+    ax.annotate("",
+                xy=to_xy,
+                xytext=from_xy,
+                arrowprops=dict(
+                    arrowstyle="->,head_length={0},head_width={1}".format(
+                        0.4 * arrowsize, 0.25 * arrowsize),
+                    color=color,
+                    lw=linewidth,
+                    alpha=alpha,
+                ),
+                label=label,
+                **kwargs)
+
+
+def stereo_contour(ax, plunge, azimuth=None, label=None, color="k", levels=4,
+                   sigma=2, linewidth=1.0, **kwargs):
+    """
+    Plot kernel density contour lines of line elements on a stereonet.
+
+    Accepts either separate arrays or a packed (N, 2) array for
+    backward compatibility.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    plunge : array-like shape (N,) or (N, 2)
+        Plunge in degrees. If shape (N, 2) and ``azimuth`` is None,
+        interpreted as packed [plunge, azimuth] pairs.
+    azimuth : array-like shape (N,), optional
+        Azimuth in degrees. Required unless ``plunge`` is packed.
     label : str, optional
     color : str
     levels : int
@@ -170,30 +295,14 @@ def stereo_contour(ax, directions, label=None, color="k", levels=4, sigma=2,
     **kwargs
         Extra kwargs forwarded to ``ax.density_contour``.
     """
-    directions = np.atleast_2d(directions)
-    ax.density_contour(directions[:, 0], directions[:, 1],
+    plunge = np.asarray(plunge, dtype=float)
+    if azimuth is None:
+        packed = np.atleast_2d(plunge)
+        plunge, azimuth = packed[:, 0], packed[:, 1]
+    else:
+        azimuth = np.asarray(azimuth, dtype=float)
+
+    ax.density_contour(plunge, azimuth,
                        measurement="lines", colors=color,
                        levels=levels, sigma=sigma,
                        linewidths=linewidth, **kwargs)
-
-
-def stereo_pole(ax, planes, label=None, **kwargs):
-    """
-    Plot poles to planes on a stereonet axes.
-
-    Each plane is defined by strike/dip (right-hand rule). The pole is
-    plotted using ``ax.pole``.
-
-    Parameters
-    ----------
-    ax : mplstereonet axes
-    planes : array-like, shape (2,) or (N, 2)
-        Strike/dip pairs in degrees.
-    label : str, optional
-        Label assigned to the first point only (legend-safe).
-    **kwargs
-        Forwarded to ``ax.pole``.
-    """
-    planes = np.atleast_2d(planes)
-    for n, (strike, dip) in enumerate(planes):
-        ax.pole(strike, dip, label=label if n == 0 else None, **kwargs)
