@@ -110,7 +110,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         sub.save(out_dir / "extract.vtu")
 
     # average stress and principal directions
-    avg_stress = sub.avg_dev_stress()
+    avg_stress = sub.avg_tensor("stress")
     val, vec = np.linalg.eigh(avg_stress)
     order = np.argsort(val)
     val, vec = val[order], vec[:, order]

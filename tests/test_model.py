@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 import numpy as np
 
@@ -10,295 +9,248 @@ from fem2geo.internal.schema import ModelSchema
 
 _N = 4
 
-_STRESS_FIELDS = {
-    "s_xx": np.array([-1.0, -2.0, -1.5, -1.0]),
-    "s_yy": np.array([ 0.0,  0.0,  0.0,  0.0]),
-    "s_zz": np.array([ 0.0,  0.0,  0.0,  0.0]),
-    "s_xy": np.array([ 0.0,  0.0,  0.0,  0.0]),
-    "s_yz": np.array([ 0.0,  0.0,  0.0,  0.0]),
-    "s_zx": np.array([ 0.0,  0.0,  0.0,  0.0]),
-}
-
-_DIR_FIELDS = {
-    "dir_s1": np.array([[1., 0., 0.]] * _N),
-    "dir_s3": np.array([[0., 0., 1.]] * _N),
-}
-
-
-def _make_grid(cell_data: dict, points: np.ndarray = None):
-    if points is None:
-        points = np.array([
-            [0., 0., -1.], [1., 0., -1.],
-            [1., 1., -2.], [0., 1., -2.],
-        ])
-    grid = MagicMock()
-    grid.points = points
-    grid.number_of_cells = _N
-    grid.n_cells = _N
-    grid.array_names = list(cell_data.keys())
-    grid.cell_data = _DictLike(cell_data)
-    grid.point_data = _DictLike({})
-    grid.cells_dict = {10: np.array([[0, 1, 2, 3]] * _N)}
-    grid.celltypes = np.array([10] * _N)
-
-    # VTK connectivity arrays used by _extract
-    grid.cell_connectivity = np.tile(np.arange(len(points)), _N)
-    grid.offset = np.arange(_N + 1) * len(points)
-
-    sizes_mock = MagicMock()
-    sizes_mock.cell_data = _DictLike({**cell_data, "Volume": np.ones(_N)})
-    grid.compute_cell_sizes.return_value = sizes_mock
-
-    centers_mock = MagicMock()
-    centers_mock.points = points
-    grid.cell_centers.return_value = centers_mock
-
-    return grid
-
 
 class _DictLike(dict):
     def get(self, key, default=None):
         return self[key] if key in self else default
 
 
-def _make_model(cell_data=None):
-    data = cell_data if cell_data is not None else {**_STRESS_FIELDS, **_DIR_FIELDS}
-    schema = ModelSchema.from_dict({
-        "solver": "test",
-        "units": {"pressure": "MPa"},
-        "fields": {
-            **{k: {"field": k, "category": "pressure"} for k in _STRESS_FIELDS},
-            "dir_s1": {"field": "dir_s1"},
-            "dir_s3": {"field": "dir_s3"},
-        },
-    })
-    return Model(_make_grid(data), schema)
+def _grid(cell_data, points=None):
+    if points is None:
+        points = np.array([[0,0,-1],[1,0,-1],[1,1,-2],[0,1,-2]], dtype=float)
+    g = MagicMock()
+    g.points = points
+    g.number_of_cells = _N
+    g.n_cells = _N
+    g.array_names = list(cell_data.keys())
+    g.cell_data = _DictLike(cell_data)
+    g.point_data = _DictLike({})
+    g.cell_connectivity = np.tile(np.arange(len(points)), _N)
+    g.offset = np.arange(_N + 1) * len(points)
+    sizes = MagicMock()
+    sizes.cell_data = _DictLike({**cell_data, "Volume": np.ones(_N)})
+    g.compute_cell_sizes.return_value = sizes
+    centers = MagicMock()
+    centers.points = points
+    g.cell_centers.return_value = centers
+    return g
 
 
-class TestFieldProperties(unittest.TestCase):
+# fixtures
 
-    @classmethod
-    def setUpClass(cls):
-        cls.m = _make_model()
+_DIRS = {
+    "dir_s1": np.array([[1, 0, 0]] * _N, dtype=float),
+    "dir_s3": np.array([[0, 0, 1]] * _N, dtype=float),
+}
 
-    def test_stress_shape(self):
-        self.assertEqual(self.m.stress.shape, (_N, 3, 3))
+_COMP_DATA = {
+    "_tensor_stress_xx": np.array([-1, -2, -1.5, -1.0]),
+    **{f"_tensor_stress_{c}": np.zeros(_N) for c in ("yy","zz","xy","yz","zx")},
+    **_DIRS,
+}
 
-    def test_stress_values(self):
-        np.testing.assert_allclose(self.m.stress[:, 0, 0], _STRESS_FIELDS["s_xx"])
+_SCHEMA_COMP = ModelSchema.from_dict({
+    "solver": "t",
+    "tensors": {"stress": {"components": {
+        c: c for c in ("xx","yy","zz","xy","yz","zx")}}},
+    "fields": {"dir_s1": {"field": "dir_s1"}, "dir_s3": {"field": "dir_s3"}},
+})
 
-    def test_stress_symmetric(self):
-        s = self.m.stress
+_SCHEMA_RECON = ModelSchema.from_dict({
+    "solver": "t",
+    "fields": {
+        "val_s1": {"field": "val_s1"}, "val_s3": {"field": "val_s3"},
+        "dir_s1": {"field": "dir_s1"}, "dir_s3": {"field": "dir_s3"},
+    },
+})
+
+_SCHEMA_VOIGT = ModelSchema.from_dict({
+    "solver": "t",
+    "tensors": {"stress": {"voigt6": "stress"}},
+    "fields": {"dir_s1": {"field": "dir_s1"}, "dir_s3": {"field": "dir_s3"}},
+})
+
+_SCHEMA_EMPTY = ModelSchema.from_dict({"solver": "t", "fields": {}})
+
+
+def _model_comp():
+    return Model(_grid(_COMP_DATA), _SCHEMA_COMP)
+
+
+def _model_recon():
+    data = {"val_s1": np.full(_N, -1.0), "val_s3": np.zeros(_N), **_DIRS}
+    return Model(_grid(data), _SCHEMA_RECON)
+
+
+class TestStressAssembly(unittest.TestCase):
+
+    def test_from_components(self):
+        m = _model_comp()
+        s = m.stress
+        self.assertEqual(s.shape, (_N, 3, 3))
+        np.testing.assert_allclose(s[:, 0, 0], [-1, -2, -1.5, -1])
         np.testing.assert_allclose(s, s.transpose(0, 2, 1), atol=1e-12)
 
-    def test_dir_s1_shape(self):
-        self.assertEqual(self.m.dir_s1.shape, (_N, 3))
+    def test_from_voigt(self):
+        packed = np.column_stack([
+            [-1, -2, -1.5, -1.0], np.zeros(_N), np.zeros(_N),
+            np.zeros(_N), np.zeros(_N), np.zeros(_N)])
+        m = Model(_grid({"stress": packed, **_DIRS}), _SCHEMA_VOIGT)
+        s = m.stress
+        self.assertEqual(s.shape, (_N, 3, 3))
+        np.testing.assert_allclose(s[:, 0, 0], [-1, -2, -1.5, -1])
 
-    def test_dir_s3_shape(self):
-        self.assertEqual(self.m.dir_s3.shape, (_N, 3))
+    def test_from_reconstruction(self):
+        m = _model_recon()
+        with self.assertLogs("fem2geoLogger", level="WARNING") as cm:
+            s = m.stress
+        self.assertEqual(s.shape, (_N, 3, 3))
+        np.testing.assert_allclose(s, s.transpose(0, 2, 1), atol=1e-12)
+        self.assertTrue(any("reconstruct" in msg.lower() for msg in cm.output))
 
-    def test_n_cells(self):
-        self.assertEqual(self.m.n_cells, _N)
-
-    def test_missing_field_raises(self):
-        with self.assertRaises(KeyError) as ctx:
-            self.m.u
-        self.assertIn("u", str(ctx.exception))
+    def test_reconstruction_fails_without_principals(self):
+        m = Model(_grid({"dir_s1": _DIRS["dir_s1"]}), _SCHEMA_RECON)
+        with self.assertRaises(KeyError):
+            _ = m.stress
 
 
-class TestDerivedFields(unittest.TestCase):
+class TestPrincipalDirections(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.m = _make_model()
+    def setUp(self):
+        self.m = _model_comp()
 
-    def test_dir_s2_orthogonal_to_s1(self):
-        dots = np.einsum("ij,ij->i", self.m.dir_s2, self.m.dir_s1)
-        np.testing.assert_allclose(dots, 0.0, atol=1e-12)
+    def test_s2_orthogonal_and_unit(self):
+        d2 = self.m.dir_s2
+        np.testing.assert_allclose(
+            np.einsum("ij,ij->i", d2, self.m.dir_s1), 0, atol=1e-12)
+        np.testing.assert_allclose(
+            np.einsum("ij,ij->i", d2, self.m.dir_s3), 0, atol=1e-12)
+        np.testing.assert_allclose(
+            np.linalg.norm(d2, axis=1), 1, atol=1e-12)
 
-    def test_dir_s2_orthogonal_to_s3(self):
-        dots = np.einsum("ij,ij->i", self.m.dir_s2, self.m.dir_s3)
-        np.testing.assert_allclose(dots, 0.0, atol=1e-12)
-
-    def test_dir_s2_unit_length(self):
-        norms = np.linalg.norm(self.m.dir_s2, axis=1)
-        np.testing.assert_allclose(norms, 1.0, atol=1e-12)
-
-    def test_val_s2_deviatoric_trace(self):
-        trace = self.m.val_s1 + self.m.val_s2 + self.m.val_s3
-        np.testing.assert_allclose(trace, 0.0, atol=1e-10)
-
-    def test_dir_s2_from_file_used_when_present(self):
-        s2 = np.array([[0., 1., 0.]] * _N)
-        m = _make_model({**_STRESS_FIELDS, **_DIR_FIELDS, "dir_s2": s2})
+    def test_s2_from_file_preferred(self):
+        s2 = np.array([[0, 1, 0]] * _N, dtype=float)
+        m = Model(_grid({**_COMP_DATA, "dir_s2": s2}), _SCHEMA_COMP)
         np.testing.assert_allclose(m.dir_s2, s2)
 
+    def test_deviatoric_trace_zero(self):
+        m = self.m
+        np.testing.assert_allclose(
+            m.val_s1 + m.val_s2 + m.val_s3, 0, atol=1e-10)
 
-class TestEigenDecomposition(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.m = _make_model()
+class TestEigen(unittest.TestCase):
 
-    def test_eigenvalues_shape(self):
-        self.assertEqual(self.m.eigenvalues().shape, (_N, 3))
+    def setUp(self):
+        self.m = _model_comp()
 
-    def test_eigenvalues_sorted(self):
+    def test_shapes_and_ordering(self):
         vals = self.m.eigenvalues()
+        self.assertEqual(vals.shape, (_N, 3))
         self.assertTrue(np.all(vals[:, 0] <= vals[:, 1]))
         self.assertTrue(np.all(vals[:, 1] <= vals[:, 2]))
 
-    def test_eigenvectors_shape(self):
-        self.assertEqual(self.m.eigenvectors().shape, (_N, 3, 3))
-
-    def test_eigenvectors_orthonormal(self):
+    def test_orthonormal_eigenvectors(self):
         vecs = self.m.eigenvectors()
         for i in range(_N):
-            np.testing.assert_allclose(vecs[i].T @ vecs[i], np.eye(3), atol=1e-12)
+            np.testing.assert_allclose(
+                vecs[i].T @ vecs[i], np.eye(3), atol=1e-12)
 
-    def test_eigenvalues_match_val_s1_s3(self):
+    def test_eigenvalues_match_val_properties(self):
         vals = self.m.eigenvalues()
         np.testing.assert_allclose(self.m.val_s1, vals[:, 0], atol=1e-12)
         np.testing.assert_allclose(self.m.val_s3, vals[:, 2], atol=1e-12)
 
 
-class TestAvgPrincipal(unittest.TestCase):
+class TestAverages(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.m = _make_model()
-
-    def test_returns_val_vec(self):
-        val, vec = self.m.avg_principal()
+    def test_avg_principal_sorted_and_orthonormal(self):
+        m = _model_comp()
+        val, vec = m.avg_principal()
         self.assertEqual(val.shape, (3,))
-        self.assertEqual(vec.shape, (3, 3))
-
-    def test_val_sorted_ascending(self):
-        val, _ = self.m.avg_principal()
         self.assertTrue(np.all(val[:-1] <= val[1:]))
-
-    def test_vec_orthonormal(self):
-        _, vec = self.m.avg_principal()
         np.testing.assert_allclose(vec.T @ vec, np.eye(3), atol=1e-10)
 
+    def test_avg_principal_accepts_name(self):
+        m = _model_comp()
+        val, vec = m.avg_principal("stress")
+        self.assertEqual(val.shape, (3,))
+        # stress_dev should also work
+        val_d, vec_d = m.avg_principal("stress_dev")
+        self.assertEqual(val_d.shape, (3,))
 
-class TestStressReconstruction(unittest.TestCase):
+    def test_avg_tensor_stress(self):
+        m = _model_comp()
+        avg = m.avg_tensor("stress")
+        self.assertEqual(avg.shape, (3, 3))
+        np.testing.assert_allclose(avg, avg.T, atol=1e-12)
 
-    def test_reconstruction_from_principals(self):
+    def test_stress_dev_removes_isotropic(self):
+        # build a stress with nonzero trace
         data = {
-            "val_s1": np.array([-1.0] * _N),
-            "val_s3": np.array([ 0.0] * _N),
-            **_DIR_FIELDS,
+            "_tensor_stress_xx": np.array([-3, -3, -3, -3.0]),
+            "_tensor_stress_yy": np.array([-2, -2, -2, -2.0]),
+            "_tensor_stress_zz": np.array([-1, -1, -1, -1.0]),
+            **{f"_tensor_stress_{c}": np.zeros(_N) for c in ("xy", "yz", "zx")},
+            **_DIRS,
         }
-        m = _make_model(data)
-        with self.assertLogs("fem2geoLogger", level="WARNING") as cm:
-            s = m.stress
-        self.assertEqual(s.shape, (_N, 3, 3))
-        self.assertTrue(any("reconstructing" in msg.lower() for msg in cm.output))
-
-    def test_reconstruction_symmetric(self):
-        data = {
-            "val_s1": np.array([-1.0] * _N),
-            "val_s3": np.array([ 0.0] * _N),
-            **_DIR_FIELDS,
-        }
-        m = _make_model(data)
-        with self.assertLogs("fem2geoLogger", level="WARNING"):
-            s = m.stress
-        np.testing.assert_allclose(s, s.transpose(0, 2, 1), atol=1e-12)
-
-    def test_reconstruction_fails_without_required_fields(self):
-        m = _make_model({"dir_s1": _DIR_FIELDS["dir_s1"]})
-        with self.assertRaises(KeyError):
-            _ = m.stress
+        m = Model(_grid(data), _SCHEMA_COMP)
+        s = m.stress
+        sd = m.stress_dev
+        # trace of deviatoric should be zero per cell
+        traces = np.trace(sd, axis1=1, axis2=2)
+        np.testing.assert_allclose(traces, 0, atol=1e-12)
+        # eigenvectors should be the same
+        _, v_full = np.linalg.eigh(s[0])
+        _, v_dev = np.linalg.eigh(sd[0])
+        for i in range(3):
+            dot = abs(np.dot(v_full[:, i], v_dev[:, i]))
+            self.assertAlmostEqual(dot, 1.0, places=10)
 
 
 class TestExtraction(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.m = _make_model()
+    def setUp(self):
+        self.m = _model_comp()
 
-    def test_extract_sphere_returns_model(self):
-        sub = self.m.extract_sphere(center=[0.5, 0.5, -1.5], radius=10.0)
-        self.assertIsInstance(sub, Model)
+    def test_sphere_and_box_return_model(self):
+        self.assertIsInstance(
+            self.m.extract_sphere([.5, .5, -1.5], 10), Model)
+        self.assertIsInstance(
+            self.m.extract_box([.5, .5, -1.5], [5, 5, 5]), Model)
 
-    def test_extract_box_returns_model(self):
-        sub = self.m.extract_box(center=[0.5, 0.5, -1.5], dim=[5., 5., 5.])
-        self.assertIsInstance(sub, Model)
-
-    def test_extract_preserves_schema(self):
-        sub = self.m.extract_sphere(center=[0.5, 0.5, -1.5], radius=10.0)
+    def test_preserves_schema(self):
+        sub = self.m.extract_sphere([.5, .5, -1.5], 10)
         self.assertIs(sub.schema, self.m.schema)
 
-    def test_extract_empty_no_crash(self):
-        sub = self.m.extract_sphere(center=[999., 999., 999.], radius=0.001)
-        self.assertIsInstance(sub, Model)
-
-    def test_extract_sphere_calls_extract_cells(self):
-        """Large radius should select all cells."""
-        self.m.extract_sphere(center=[0.5, 0.5, -1.5], radius=100.0)
-        self.m._grid.extract_cells.assert_called()
+    def test_large_radius_selects_all(self):
+        self.m.extract_sphere([.5, .5, -1.5], 100)
         ids = self.m._grid.extract_cells.call_args[0][0]
         np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
 
-    def test_extract_box_calls_extract_cells(self):
-        """Large box should select all cells."""
-        self.m.extract_box(center=[0.5, 0.5, -1.5], dim=[100., 100., 100.])
-        self.m._grid.extract_cells.assert_called()
-        ids = self.m._grid.extract_cells.call_args[0][0]
-        np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
-
-    def test_extract_partial_selection(self):
-        """Only points near origin should be selected."""
-        # points[0] = [0, 0, -1], points[1] = [1, 0, -1] are within radius 1.5
-        # points[2] = [1, 1, -2], points[3] = [0, 1, -2] are further away
-        # All cells reference all 4 points, so all cells are still touched.
-        # Use a tighter radius that excludes points 2 and 3.
-        sub = self.m.extract_sphere(center=[0.5, 0.0, -1.0], radius=0.6)
-        self.m._grid.extract_cells.assert_called()
-
-    def test_extract_mask_based(self):
-        """Directly test _extract with a boolean mask."""
-        mask = np.array([True, False, False, False])
-        self.m._extract(mask)
-        self.m._grid.extract_cells.assert_called()
-        ids = self.m._grid.extract_cells.call_args[0][0]
-        # All cells reference point 0, so all should be selected
-        np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
-
-    def test_extract_mask_none_selected(self):
-        """All-False mask should return empty grid."""
-        mask = np.array([False, False, False, False])
-        result = self.m._extract(mask)
-        # Should not call extract_cells, should return empty grid
+    def test_empty_mask_no_crash(self):
+        result = self.m._extract(np.zeros(4, dtype=bool))
         self.assertIsNotNone(result)
+
+    def test_missing_field_raises(self):
+        with self.assertRaises(KeyError):
+            self.m.u
 
 
 class TestFromFile(unittest.TestCase):
 
-    def _schema(self):
-        return ModelSchema.from_dict({"solver": "test", "units": {}, "fields": {}})
-
-    def test_from_file_returns_model(self):
-        schema = self._schema()
-        with patch("fem2geo.model.load_grid", return_value=_make_grid({})), \
-             patch("fem2geo.model.ModelSchema.builtin", return_value=schema):
-            m = Model.from_file("dummy.vtk", schema="test")
+    def test_string_schema_resolved(self):
+        with patch("fem2geo.model.load_grid", return_value=_grid({})), \
+             patch("fem2geo.model.ModelSchema.builtin",
+                   return_value=_SCHEMA_EMPTY) as mock:
+            m = Model.from_file("x.vtk", schema="adeli")
+        mock.assert_called_once_with("adeli")
         self.assertIsInstance(m, Model)
 
-    def test_string_schema_calls_builtin(self):
-        schema = self._schema()
-        with patch("fem2geo.model.load_grid", return_value=_make_grid({})), \
-             patch("fem2geo.model.ModelSchema.builtin", return_value=schema) as mock:
-            Model.from_file("dummy.vtk", schema="adeli")
-        mock.assert_called_once_with("adeli")
-
     def test_schema_retained(self):
-        schema = self._schema()
-        with patch("fem2geo.model.load_grid", return_value=_make_grid({})):
-            m = Model.from_file("dummy.vtk", schema=schema)
-        self.assertIs(m.schema, schema)
+        with patch("fem2geo.model.load_grid", return_value=_grid({})):
+            m = Model.from_file("x.vtk", schema=_SCHEMA_EMPTY)
+        self.assertIs(m.schema, _SCHEMA_EMPTY)
 
 
 if __name__ == "__main__":

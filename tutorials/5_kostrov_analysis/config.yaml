@@ -1,0 +1,23 @@
+job: kostrov_analysis
+schema: adeli2
+units:
+  pressure: MPa
+
+model: ../data/fault_elastoplastic.vtu
+
+zone:
+  type: sphere
+  center: [10000, 10000, -5000]
+  radius: 500
+
+data:
+  faults:
+    file: ../data/faults_b.csv                # columns: strike, dip, rake (signed, Aki & Richards)
+
+compare: strain
+
+plot:
+  title: "Kostrov analysis"
+
+output:
+  dir: results_total/

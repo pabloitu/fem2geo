@@ -1,0 +1,44 @@
+job: kostrov_analysis
+schema: adeli2
+units:
+  pressure: MPa
+
+model: ../data/fault_elastoplastic.vtu
+
+zone:
+  type: sphere
+  center: [10000, 10000, -5000]
+  radius: 500
+
+data:
+  faults:
+    file: ../data/faults_b.csv                # columns: strike, dip, rake (signed, Aki & Richards)
+
+compare: strain_elastic
+
+plot:
+  title: "Kostrov analysis — with spread"
+  figsize: [8, 8]
+  dpi: 200
+  kostrov:
+    color: "#EF9A9A"
+    markersize: 12
+  model:
+    color: "#90CAF9"
+    markersize: 12
+  cell_directions:
+    show: true
+    style: scatter
+    color: "#90CAF9"
+    markersize: 3
+    alpha: 0.6
+  data_spread:
+    show: true
+    style: scatter
+    color: "#EF9A9A"
+    markersize: 4
+    alpha: 0.6
+
+output:
+  dir: results_plastic/
+  save_vtu: false

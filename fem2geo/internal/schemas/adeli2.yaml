@@ -1,0 +1,62 @@
+solver: adeli2
+
+units:
+  pressure:     Pa
+  distance:     m
+  velocity:     m/s
+  temperature:  C
+  viscosity:    Pa.s
+  strain_rate:  1/s
+  heat_flux:    mW/m2
+
+tensors:
+  stress:
+    voigt6: "stresses_(Pa)"
+    category: pressure
+  strain:
+    voigt6: "strains_(-)"
+  strain_rate:
+    voigt6: "strain_rates_(1/s)"
+    category: strain_rate
+
+fields:
+  # Deviatoric principal stress magnitudes
+  val_s1: { field: "devsigma1_(Pa)", category: pressure }
+  val_s2: { field: "devsigma2_(Pa)", category: pressure }
+  val_s3: { field: "devsigma3_(Pa)", category: pressure }
+
+  # Principal stress directions (ENU unit vectors)
+  dir_s1: { field: "dir_devsigma1_(-)" }
+  dir_s2: { field: "dir_devsigma2_(-)" }
+  dir_s3: { field: "dir_devsigma3_(-)" }
+
+  # Scalar stress
+  mean_stress: { field: "mean_stress_(Pa)",  category: pressure }
+  j2_stress:   { field: "Eqv(stress)_(Pa)",  category: pressure }
+
+  # Scalar strain
+  j2_strain:     { field: "Eqv(strain)_(-)" }
+  i1_strain:     { field: "vol_strain_(-)" }
+  j2_strain_rate: { field: "Eqv(strainRate)_(1/s)", category: strain_rate }
+  i1_strain_rate: { field: "vol_strainRate_(1/s)",   category: strain_rate }
+
+  # Plasticity
+  plastic_eff:  { field: "Eff_plastic_strain_(-)" }
+  plastic_vol:  { field: "Vol_plastic_strain_(-)" }
+  plastic_mode: { field: "Plastic_Mode_(-)" }
+
+  # Rheology
+  threshold_ratio: { field: "threshold_ratio_(-)" }
+  viscosity:       { field: "Eff_viscosity_(Pa.s)", category: viscosity }
+
+  # Fluid and thermal (cell data)
+  darcy_vel: { field: "Darcy_Vel_(m/s)",   category: velocity }
+  heat_flux: { field: "Heat_flux_(mW/m2)", category: heat_flux }
+
+  # Kinematics (point data)
+  v: { field: "velocity_(m/s)",   category: velocity }
+  u: { field: "displacement_(m)", category: distance }
+
+  # Thermal (point data)
+  temperature:    { field: "temperature_(C)",     category: temperature }
+  fluid_pressure: { field: "fluid_pressure_(Pa)", category: pressure }

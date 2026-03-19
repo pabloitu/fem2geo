@@ -14,6 +14,7 @@ _JOBS = {
     "tendency_plot":        "fem2geo.jobs.tendency_plot",
     "fracture_analysis":    "fem2geo.jobs.fracture_analysis",
     "resolved_shear":       "fem2geo.jobs.resolved_shear",
+    "kostrov_analysis":     "fem2geo.jobs.kostrov_analysis",
 }
 
 
