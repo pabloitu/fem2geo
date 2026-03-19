@@ -205,10 +205,13 @@ def plane_basis_enu(strike, dip):
     """
     Orthonormal basis vectors of a fault plane in ENU.
 
-    The strike direction is horizontal along the strike azimuth. The downdip
-    direction points at azimuth ``strike + 90°``, tilted downward at the dip
-    angle. Strike and downdip are orthogonal and both lie in the plane.
-    Updip is ``-downdip``.
+    Returns the strike direction, the dip vector (steepest descent line
+    in the plane), and the plane normal. All three are mutually
+    orthogonal unit vectors forming a right-handed basis.
+
+    The dip vector plunges at the dip angle toward azimuth
+    ``strike + 90°``. The normal points away from the dipping side
+    (upward for non-vertical planes after canonicalization).
 
     Parameters
     ----------
@@ -218,8 +221,11 @@ def plane_basis_enu(strike, dip):
     Returns
     -------
     strike_dir : numpy.ndarray, shape (3,) or (N, 3)
-    downdip_dir : numpy.ndarray, shape (3,) or (N, 3)
-    updip_dir : numpy.ndarray, shape (3,) or (N, 3)
+        Horizontal unit vector along the strike azimuth.
+    dip_vec : numpy.ndarray, shape (3,) or (N, 3)
+        Unit vector plunging at the dip angle toward the dip direction.
+    normal : numpy.ndarray, shape (3,) or (N, 3)
+        Unit normal to the plane (= strike_dir × dip_vec).
     """
     strike = np.asarray(strike, dtype=float)
     dip = np.asarray(dip, dtype=float)
@@ -230,15 +236,16 @@ def plane_basis_enu(strike, dip):
     da = s + np.pi / 2.0
 
     strike_dir = np.stack([np.sin(s), np.cos(s), np.zeros_like(s)], axis=-1)
-    downdip_dir = np.stack([
-        np.sin(da) * np.sin(d),
-        np.cos(da) * np.sin(d),
-        -np.cos(d),
+    dip_vec = np.stack([
+        np.sin(da) * np.cos(d),
+        np.cos(da) * np.cos(d),
+        -np.sin(d),
     ], axis=-1)
+    normal = np.cross(strike_dir, dip_vec)
 
     if scalar:
-        return strike_dir.squeeze(), downdip_dir.squeeze(), -downdip_dir.squeeze()
-    return strike_dir, downdip_dir, -downdip_dir
+        return strike_dir.squeeze(), dip_vec.squeeze(), normal.squeeze()
+    return strike_dir, dip_vec, normal
 
 
 # line-rake conversions (axis, unsigned rake [0, 180])
@@ -314,11 +321,9 @@ def line_enu2rake(enu, strike, dip, check=False, tol=5e-3):
     norms = np.linalg.norm(enu, axis=1, keepdims=True)
     enu = enu / np.where(norms < 1e-12, 1.0, norms)
 
-    strike_dir, _, updip_dir = plane_basis_enu(strike, dip)
+    strike_dir, dip_vec, normal = plane_basis_enu(strike, dip)
 
     if check and scalar:
-        normal = np.cross(strike_dir, updip_dir)
-        normal = normal / np.linalg.norm(normal)
         proj = np.abs(enu[0] @ normal)
         if proj > tol:
             raise ValueError(
@@ -327,7 +332,7 @@ def line_enu2rake(enu, strike, dip, check=False, tol=5e-3):
             )
 
     cs = enu @ strike_dir
-    cu = enu @ updip_dir
+    cu = enu @ (-dip_vec)  # updip component
     rake = np.rad2deg(np.arctan2(cu, cs))
 
     # canonicalize to [0, 180]: axis ambiguity
@@ -370,9 +375,9 @@ def slip_rake2enu(strike, dip, rake):
     scalar = strike.ndim == 0 and dip.ndim == 0 and rake.ndim == 0
 
     r = np.deg2rad(rake)
-    strike_dir, _, updip_dir = plane_basis_enu(strike, dip)
+    strike_dir, dip_vec, _ = plane_basis_enu(strike, dip)
 
-    slip = np.cos(r)[..., None] * strike_dir + np.sin(r)[..., None] * updip_dir
+    slip = np.cos(r)[..., None] * strike_dir + np.sin(r)[..., None] * (-dip_vec)
 
     norms = np.linalg.norm(slip, axis=-1, keepdims=True)
     slip = slip / np.where(norms < 1e-12, 1.0, norms)
@@ -403,10 +408,10 @@ def slip_enu2rake(enu, strike, dip):
     if scalar:
         enu = enu[None, :]
 
-    strike_dir, _, updip_dir = plane_basis_enu(strike, dip)
+    strike_dir, dip_vec, _ = plane_basis_enu(strike, dip)
 
     cs = enu @ strike_dir
-    cu = enu @ updip_dir
+    cu = enu @ (-dip_vec)  # updip component
     rake = np.rad2deg(np.arctan2(cu, cs))
 
     if scalar:
@@ -418,11 +423,12 @@ def slip_enu2rake(enu, strike, dip):
 
 def plane_sphe2enu(strike, dip):
     """
-    Plane (strike/dip) to ENU unit normal (pole), canonicalized U >= 0.
+    Plane (strike/dip) to ENU unit normal, canonicalized U >= 0.
 
-    The pole has azimuth ``strike + 90°`` (dip direction) and plunge
-    ``90° - dip``. This is the standard structural geology pole that
-    roundtrips through ``plane_pole2sphe``.
+    Computes the normal as the cross product of the strike direction
+    (horizontal, azimuth = strike) and the dip vector (plunging at the
+    dip angle toward azimuth = strike + 90°). Both lie in the plane,
+    so their cross product is the true geometric normal.
 
     Parameters
     ----------
@@ -437,11 +443,15 @@ def plane_sphe2enu(strike, dip):
     dip = np.asarray(dip, dtype=float)
     scalar = strike.ndim == 0 and dip.ndim == 0
 
-    pole_azm = strike + 90.0
-    pole_plunge = 90.0 - dip
+    # v1: strike direction in ENU (plunge=0, azimuth=strike)
+    v1 = line_sphe2enu(np.zeros_like(strike), strike)
 
-    ned = line_sphe2ned(pole_plunge, pole_azm)
-    n = ned2enu(ned)
+    # v2: dip vector in ENU (plunge=dip, azimuth=strike+90)
+    v2 = line_sphe2enu(dip, strike + 90.0)
+
+    n = np.cross(v1, v2)
+    norms = np.linalg.norm(n, axis=-1, keepdims=True)
+    n = n / np.where(norms < 1e-12, 1.0, norms)
 
     # canonicalize U >= 0 (handle vertical planes where U ~ 0)
     if n.ndim == 1:
@@ -461,7 +471,10 @@ def plane_sphe2enu(strike, dip):
 
 def plane_sphe2ned(strike, dip):
     """
-    Plane (strike/dip) to NED unit normal (pole), canonicalized D >= 0.
+    Plane (strike/dip) to NED unit normal, canonicalized D >= 0.
+
+    Computes the normal as the cross product of the strike direction
+    and the dip vector, both in NED coordinates.
 
     Parameters
     ----------
@@ -476,10 +489,15 @@ def plane_sphe2ned(strike, dip):
     dip = np.asarray(dip, dtype=float)
     scalar = strike.ndim == 0 and dip.ndim == 0
 
-    pole_azm = strike + 90.0
-    pole_plunge = 90.0 - dip
+    # v1: strike direction in NED (plunge=0, azimuth=strike)
+    v1 = line_sphe2ned(np.zeros_like(strike), strike)
 
-    n = line_sphe2ned(pole_plunge, pole_azm)
+    # v2: dip vector in NED (plunge=dip, azimuth=strike+90)
+    v2 = line_sphe2ned(dip, strike + 90.0)
+
+    n = np.cross(v1, v2)
+    norms = np.linalg.norm(n, axis=-1, keepdims=True)
+    n = n / np.where(norms < 1e-12, 1.0, norms)
 
     # canonicalize D >= 0 (handle horizontal normals)
     if n.ndim == 1:

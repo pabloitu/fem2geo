@@ -229,14 +229,14 @@ class TestSlips(unittest.TestCase):
 
     def test_rake90_is_updip(self):
         for strike in [0, 45, 230]:
-            _, _, updip = plane_basis_enu(strike, 60)
+            _, dip_vec, _ = plane_basis_enu(strike, 60)
             slip = slip_rake2enu(strike, 60, 90)
-            np.testing.assert_allclose(slip, updip, atol=1e-12)
+            np.testing.assert_allclose(slip, -dip_vec, atol=1e-12)
 
     def test_rake_neg90_is_downdip(self):
-        _, downdip, _ = plane_basis_enu(230, 60)
+        _, dip_vec, _ = plane_basis_enu(230, 60)
         slip = slip_rake2enu(230, 60, -90)
-        np.testing.assert_allclose(slip, downdip, atol=1e-12)
+        np.testing.assert_allclose(slip, dip_vec, atol=1e-12)
 
     def test_rake0_is_strike(self):
         s_dir, _, _ = plane_basis_enu(45, 60)
@@ -279,25 +279,28 @@ class TestPlanes(unittest.TestCase):
 
     def test_basis_orthogonality(self):
         for strike in [0, 45, 90, 180, 230, 315]:
-            s_dir, dd_dir, ud_dir = plane_basis_enu(strike, 60)
-            self.assertAlmostEqual(np.dot(s_dir, dd_dir), 0.0, places=12)
+            s_dir, dip_vec, normal = plane_basis_enu(strike, 60)
+            self.assertAlmostEqual(np.dot(s_dir, dip_vec), 0.0, places=12)
+            self.assertAlmostEqual(np.dot(s_dir, normal), 0.0, places=12)
+            self.assertAlmostEqual(np.dot(dip_vec, normal), 0.0, places=12)
             self.assertAlmostEqual(np.linalg.norm(s_dir), 1.0, places=14)
-            self.assertAlmostEqual(np.linalg.norm(dd_dir), 1.0, places=14)
-            np.testing.assert_allclose(ud_dir, -dd_dir, atol=1e-14)
+            self.assertAlmostEqual(np.linalg.norm(dip_vec), 1.0, places=14)
+            self.assertAlmostEqual(np.linalg.norm(normal), 1.0, places=14)
 
     def test_basis_downdip_z_negative(self):
         for strike in [0, 45, 120, 230, 315]:
-            _, dd, ud = plane_basis_enu(strike, 60)
-            self.assertLess(dd[2], 0)
-            self.assertGreater(ud[2], 0)
+            _, dip_vec, _ = plane_basis_enu(strike, 60)
+            self.assertLess(dip_vec[2], 0)
 
     def test_basis_vectorized(self):
         strikes = np.array([0, 45, 230], dtype=float)
         dips = np.array([60, 60, 60], dtype=float)
-        s_dir, dd_dir, ud_dir = plane_basis_enu(strikes, dips)
+        s_dir, dip_vec, normal = plane_basis_enu(strikes, dips)
         self.assertEqual(s_dir.shape, (3, 3))
         for i in range(3):
-            self.assertAlmostEqual(np.dot(s_dir[i], dd_dir[i]), 0.0, places=12)
+            self.assertAlmostEqual(np.dot(s_dir[i], dip_vec[i]), 0.0, places=12)
+            self.assertAlmostEqual(np.dot(s_dir[i], normal[i]), 0.0, places=12)
+            self.assertAlmostEqual(np.dot(dip_vec[i], normal[i]), 0.0, places=12)
 
     # plane_sphe2enu
 
@@ -325,6 +328,21 @@ class TestPlanes(unittest.TestCase):
             s_dir, _, _ = plane_basis_enu(strike, 60)
             n = plane_sphe2enu(strike, 60)
             self.assertAlmostEqual(np.dot(n, s_dir), 0.0, places=10)
+
+    def test_sphe2enu_perpendicular_to_dip_vec(self):
+        for strike in [0, 45, 120, 230]:
+            _, dip_vec, _ = plane_basis_enu(strike, 60)
+            n = plane_sphe2enu(strike, 60)
+            self.assertAlmostEqual(np.dot(n, dip_vec), 0.0, places=10)
+
+    def test_sphe2enu_matches_basis_normal(self):
+        for strike in [0, 45, 120, 230, 315]:
+            for dip in [10, 30, 60, 80]:
+                _, _, normal = plane_basis_enu(strike, dip)
+                n = plane_sphe2enu(strike, dip)
+                # may differ by sign due to U>=0 canonicalization
+                dot = abs(np.dot(n, normal))
+                self.assertAlmostEqual(dot, 1.0, places=10)
 
     def test_sphe2enu_vectorized(self):
         strikes = np.array([0, 45, 120, 230], dtype=float)
