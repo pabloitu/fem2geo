@@ -110,11 +110,11 @@ def normals_from_planes(planes):
     if planes.ndim == 1:
         if planes.shape != (2,):
             raise ValueError("plane must be length-2 [strike, dip].")
-        return tr.plane_sphe2enu(planes)[None, :]
+        return tr.plane_sphe2enu(planes[0], planes[1])[None, :]
     if planes.ndim == 2:
         if planes.shape[1] != 2:
             raise ValueError("planes must have shape (N, 2).")
-        return np.array([tr.plane_sphe2enu(p) for p in planes], dtype=float)
+        return tr.plane_sphe2enu(planes[:, 0], planes[:, 1])
     raise ValueError("planes must be shape (2,) or (N,2).")
 
 
@@ -173,9 +173,11 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     Returns
     -------
     tau : float
-        Shear traction magnitude (signed by the chosen shear direction convention).
+        Shear traction magnitude (always non-negative).
     tau_hat : numpy.ndarray, shape (3,)
-        Unit shear direction in ENU.
+        Directed unit shear traction vector in ENU. This is the true physical
+        direction of the resolved shear stress — no sign canonicalization is
+        applied, so the vector carries kinematic sense.
 
     Raises
     ------
@@ -184,9 +186,10 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
 
     Notes
     -----
-    The sign convention for ``tau`` is defined by enforcing ``tau_hat[2] >= 0`` (up-directed)
-    and applying the same sign to ``tau``. This provides a deterministic representation but
-    is not a kinematic footwall/hanging-wall criterion.
+    The returned ``tau_hat`` is the direction in which the material on the
+    positive-normal side of the plane is being pushed by shear stress. For
+    Wallace-Bott comparison, this can be compared directly with the observed
+    slip vector (e.g. from a signed rake).
     """
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):
@@ -196,7 +199,8 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
         raise ValueError("Provide exactly one of plane or normal.")
 
     if normal is None:
-        n = tr.plane_sphe2enu(np.asarray(plane, dtype=float))
+        plane = np.asarray(plane, dtype=float)
+        n = tr.plane_sphe2enu(plane[0], plane[1])
     else:
         n = ensure_normals(normal)[0]
 
@@ -208,12 +212,7 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     if mag < eps:
         return 0.0, np.zeros(3, dtype=float)
 
-    d = t_s / mag
-    if d[2] < 0:
-        mag *= -1.0
-        d *= -1.0
-
-    return mag, d
+    return mag, t_s / mag
 
 
 def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
