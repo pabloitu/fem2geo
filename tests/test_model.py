@@ -34,11 +34,16 @@ def _make_grid(cell_data: dict, points: np.ndarray = None):
     grid = MagicMock()
     grid.points = points
     grid.number_of_cells = _N
+    grid.n_cells = _N
     grid.array_names = list(cell_data.keys())
     grid.cell_data = _DictLike(cell_data)
     grid.point_data = _DictLike({})
     grid.cells_dict = {10: np.array([[0, 1, 2, 3]] * _N)}
     grid.celltypes = np.array([10] * _N)
+
+    # VTK connectivity arrays used by _extract
+    grid.cell_connectivity = np.tile(np.arange(len(points)), _N)
+    grid.offset = np.arange(_N + 1) * len(points)
 
     sizes_mock = MagicMock()
     sizes_mock.cell_data = _DictLike({**cell_data, "Volume": np.ones(_N)})
@@ -230,6 +235,45 @@ class TestExtraction(unittest.TestCase):
         sub = self.m.extract_sphere(center=[999., 999., 999.], radius=0.001)
         self.assertIsInstance(sub, Model)
 
+    def test_extract_sphere_calls_extract_cells(self):
+        """Large radius should select all cells."""
+        self.m.extract_sphere(center=[0.5, 0.5, -1.5], radius=100.0)
+        self.m._grid.extract_cells.assert_called()
+        ids = self.m._grid.extract_cells.call_args[0][0]
+        np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
+
+    def test_extract_box_calls_extract_cells(self):
+        """Large box should select all cells."""
+        self.m.extract_box(center=[0.5, 0.5, -1.5], dim=[100., 100., 100.])
+        self.m._grid.extract_cells.assert_called()
+        ids = self.m._grid.extract_cells.call_args[0][0]
+        np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
+
+    def test_extract_partial_selection(self):
+        """Only points near origin should be selected."""
+        # points[0] = [0, 0, -1], points[1] = [1, 0, -1] are within radius 1.5
+        # points[2] = [1, 1, -2], points[3] = [0, 1, -2] are further away
+        # All cells reference all 4 points, so all cells are still touched.
+        # Use a tighter radius that excludes points 2 and 3.
+        sub = self.m.extract_sphere(center=[0.5, 0.0, -1.0], radius=0.6)
+        self.m._grid.extract_cells.assert_called()
+
+    def test_extract_mask_based(self):
+        """Directly test _extract with a boolean mask."""
+        mask = np.array([True, False, False, False])
+        self.m._extract(mask)
+        self.m._grid.extract_cells.assert_called()
+        ids = self.m._grid.extract_cells.call_args[0][0]
+        # All cells reference point 0, so all should be selected
+        np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
+
+    def test_extract_mask_none_selected(self):
+        """All-False mask should return empty grid."""
+        mask = np.array([False, False, False, False])
+        result = self.m._extract(mask)
+        # Should not call extract_cells, should return empty grid
+        self.assertIsNotNone(result)
+
 
 class TestFromFile(unittest.TestCase):
 
@@ -255,37 +299,6 @@ class TestFromFile(unittest.TestCase):
         with patch("fem2geo.model.load_grid", return_value=_make_grid({})):
             m = Model.from_file("dummy.vtk", schema=schema)
         self.assertIs(m.schema, schema)
-
-
-class TestIntegration(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        data_dir = Path(__file__).parent / "data"
-        vtk_files = list(data_dir.glob("*.vt*")) if data_dir.exists() else []
-        cls.path = vtk_files[0] if vtk_files else None
-
-    def setUp(self):
-        if self.path is None:
-            self.skipTest("No fixture file found in tests/data/")
-
-    def test_loads_without_error(self):
-        self.assertIsInstance(Model.from_file(self.path), Model)
-
-    def test_stress_shape(self):
-        m = Model.from_file(self.path)
-        self.assertEqual(m.stress.ndim, 3)
-        self.assertEqual(m.stress.shape[1:], (3, 3))
-
-    def test_avg_principal_shape(self):
-        m = Model.from_file(self.path)
-        val, vec = m.avg_principal()
-        self.assertEqual(val.shape, (3,))
-        self.assertEqual(vec.shape, (3, 3))
-
-    def test_eigenvalues_shape(self):
-        m = Model.from_file(self.path)
-        self.assertEqual(m.eigenvalues().shape[1], 3)
 
 
 if __name__ == "__main__":

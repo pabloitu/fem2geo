@@ -49,15 +49,23 @@ class FractureData:
 @dataclass
 class FaultData:
     """
-    Fault slip measurements: plane orientation with rake.
+    Fault slip measurements: plane orientation with signed rake.
+
+    Uses the Aki & Richards rake convention: rake is measured in the fault
+    plane from the strike direction, positive toward the hanging-wall up-dip
+    direction. Range: (-180, 180].
+
+    - rake > 0: reverse/thrust component (hanging wall moves up).
+    - rake < 0: normal component (hanging wall moves down).
+    - rake = 0: pure left-lateral.
+    - rake = ±180: pure right-lateral.
 
     Parameters
     ----------
     planes : numpy.ndarray, shape (N, 2)
         Strike/dip pairs in degrees (right-hand rule).
     rakes : numpy.ndarray, shape (N,)
-        Rake angles in degrees, measured within the fault plane from the
-        strike direction.
+        Signed rake angles in degrees (Aki & Richards convention).
 
     Notes
     -----
@@ -74,6 +82,8 @@ class FaultData:
             raise ValueError("planes must have shape (N, 2): [strike, dip].")
         if self.planes.shape[0] != self.rakes.shape[0]:
             raise ValueError("planes and rakes must have the same number of rows.")
+        if np.any(np.abs(self.rakes) > 180.0):
+            raise ValueError("Rakes must be in (-180, 180] (Aki & Richards convention).")
 
     def __len__(self):
         return self.planes.shape[0]

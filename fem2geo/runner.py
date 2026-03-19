@@ -1,6 +1,6 @@
-import sys
-import logging
 import argparse
+import logging
+import sys
 from pathlib import Path
 
 import yaml
@@ -10,9 +10,10 @@ from fem2geo.internal.logger import setup_logger
 log = logging.getLogger("fem2geoLogger")
 
 _JOBS = {
-    "principal_directions":    "fem2geo.jobs.principal_directions",
-    "tendency_plot":           "fem2geo.jobs.tendency_plot",
-    "fracture_analysis":   "fem2geo.jobs.fracture_analysis",
+    "principal_directions": "fem2geo.jobs.principal_directions",
+    "tendency_plot":        "fem2geo.jobs.tendency_plot",
+    "fracture_analysis":    "fem2geo.jobs.fracture_analysis",
+    "resolved_shear":       "fem2geo.jobs.resolved_shear",
 }
 
 

@@ -1,19 +1,39 @@
+"""
+Coordinate transformations for structural geology.
+
+All functions accept scalar or array inputs and return matching shapes
+(NumPy broadcasting). Two families of line representations:
+
+- ``line_*``: axes (undirected), canonicalized to plunge >= 0 (down-directed).
+  Suitable for stereonet plotting where v and -v are equivalent.
+- ``slip_*``: directed vectors preserving kinematic sense. Uses the Aki &
+  Richards signed rake convention (-180, 180].
+
+Coordinate systems:
+
+- **ENU**: East, North, Up (x, y, z). Internal standard.
+- **NED**: North, East, Down.
+- **Spherical (sphe)**: [plunge, azimuth] in degrees. Plunge positive
+  downward, azimuth clockwise from North.
+- **Plane**: [strike, dip] in degrees, right-hand rule.
+"""
+
 import numpy as np
 
 
+# utilities
+
 def unit(v):
     """
-    Return the unit vector of ``v``.
+    Return the unit vector of ``v`` (single vector only).
 
     Parameters
     ----------
     v : array-like, shape (3,)
-        Vector to normalize.
 
     Returns
     -------
     numpy.ndarray, shape (3,)
-        Unit-length vector.
 
     Raises
     ------
@@ -27,403 +47,495 @@ def unit(v):
     return v / n
 
 
-def enu_to_ned(v_enu):
+# coordinate frame conversions
+
+def enu2ned(v):
     """
-    Convert a vector from ENU (E, N, U) to NED (N, E, D).
+    Convert vector(s) from ENU to NED.
+
+    Swaps first two components and negates the third:
+    ``[E, N, U] -> [N, E, D]``.
 
     Parameters
     ----------
-    v_enu : array-like, shape (3,)
-        Vector components in ENU coordinates: [E, N, U].
+    v : array-like, shape (..., 3)
 
     Returns
     -------
-    numpy.ndarray, shape (3,)
-        Vector components in NED coordinates: [N, E, D].
-
-    Notes
-    -----
-    Coordinate definitions:
-      - ENU: x=East, y=North, z=Up
-      - NED: x=North, y=East, z=Down
-
-    Mapping:
-      - N = ENU_y
-      - E = ENU_x
-      - D = -ENU_z
+    numpy.ndarray, same shape as input
     """
-    v_enu = np.asarray(v_enu, dtype=float)
-    return np.array([v_enu[1], v_enu[0], -v_enu[2]], dtype=float)
+    v = np.asarray(v, dtype=float)
+    out = np.empty_like(v)
+    out[..., 0] = v[..., 1]
+    out[..., 1] = v[..., 0]
+    out[..., 2] = -v[..., 2]
+    return out
 
 
-def ned_to_enu(v_ned):
+def ned2enu(v):
     """
-    Convert a vector from NED (N, E, D) to ENU (E, N, U).
+    Convert vector(s) from NED to ENU.
+
+    Same operation as :func:`enu2ned` (the mapping is its own inverse).
 
     Parameters
     ----------
-    v_ned : array-like, shape (3,)
-        Vector components in NED coordinates: [N, E, D].
+    v : array-like, shape (..., 3)
 
     Returns
     -------
-    numpy.ndarray, shape (3,)
-        Vector components in ENU coordinates: [E, N, U].
-
-    Notes
-    -----
-    Mapping:
-      - E = NED_y
-      - N = NED_x
-      - U = -NED_z
+    numpy.ndarray, same shape as input
     """
-    v_ned = np.asarray(v_ned, dtype=float)
-    return np.array([v_ned[1], v_ned[0], -v_ned[2]], dtype=float)
+    return enu2ned(v)
 
 
-def line_sphe2ned(sphe):
+# line (axis) conversions — canonicalized to down-directed (D >= 0)
+
+def line_sphe2ned(plunge, azimuth):
     """
-    Transform a line element from spherical coordinates to cartesian NED.
+    Spherical line coordinates to NED unit axis.
 
     Parameters
     ----------
-    sphe : array-like, shape (2,)
-        Spherical line coordinates [plunge, azm] in degrees, where:
-          - azm is azimuth clockwise from North.
-          - plunge is positive downward from horizontal.
+    plunge : float or array-like
+        Plunge in degrees (>= 0).
+    azimuth : float or array-like
+        Azimuth in degrees, clockwise from North.
 
     Returns
     -------
-    numpy.ndarray, shape (3,)
-        Unit line direction cosines in NED coordinates: [N, E, D].
-
-    Notes
-    -----
-    Line elements are treated as axes (v and -v equivalent) and canonicalized
-    to be down-directed (D >= 0).
+    numpy.ndarray, shape (3,) or (N, 3)
+        NED direction cosines, canonicalized D >= 0.
     """
-    sphe = np.asarray(sphe, dtype=float)
-    plunge = np.deg2rad(sphe[0])
-    azm = np.deg2rad(sphe[1])
+    plunge = np.asarray(plunge, dtype=float)
+    azimuth = np.asarray(azimuth, dtype=float)
+    scalar = plunge.ndim == 0 and azimuth.ndim == 0
 
-    ned = np.array(
-        [
-            np.cos(azm) * np.cos(plunge),
-            np.sin(azm) * np.cos(plunge),
-            np.sin(plunge),
-        ],
-        dtype=float,
-    )
+    p = np.deg2rad(plunge)
+    a = np.deg2rad(azimuth)
 
-    if ned[2] < 0:
-        ned *= -1
+    cp = np.cos(p)
+    ned = np.stack([np.cos(a) * cp, np.sin(a) * cp, np.sin(p)], axis=-1)
 
-    return ned
+    # canonicalize: flip where D < 0
+    mask = ned[..., 2] < 0
+    if np.any(mask):
+        ned[mask] *= -1
+
+    return ned.squeeze() if scalar else ned
 
 
-def line_ned2sphe(ned, eps=1e-12):
+def line_ned2sphe(ned):
     """
-    Transform a line element from cartesian NED coordinates to spherical.
+    NED unit axis to spherical line coordinates.
 
     Parameters
     ----------
-    ned : array-like, shape (3,)
-        Line direction cosines in NED coordinates: [N, E, D]. The input may be
-        non-unit; it will be normalized.
-    eps : float
-        Threshold to treat a line as near-vertical when computing azimuth.
+    ned : array-like, shape (3,) or (N, 3)
+        NED direction cosines (need not be unit; will be normalized).
 
     Returns
     -------
-    numpy.ndarray, shape (2,)
-        Spherical line coordinates [plunge, azm] in degrees, where:
-          - azm is azimuth clockwise from North in [0, 360)
-          - plunge is positive downward in [0, 90]
-
-    Notes
-    -----
-    Line elements are treated as axes (v and -v equivalent) and canonicalized
-    to be down-directed (D >= 0). Azimuth is undefined for vertical lines; a
-    deterministic value (0) is returned when the horizontal component is below
-    ``eps``.
+    plunge : float or numpy.ndarray, shape (N,)
+        Plunge in degrees [0, 90].
+    azimuth : float or numpy.ndarray, shape (N,)
+        Azimuth in degrees [0, 360). Returns 0 for vertical lines.
     """
-    ned = unit(ned)
+    ned = np.asarray(ned, dtype=float)
+    scalar = ned.ndim == 1
 
-    if ned[2] < 0:
-        ned = -ned
+    if scalar:
+        ned = ned[None, :]
 
-    plunge = np.rad2deg(np.arcsin(np.clip(ned[2], -1.0, 1.0)))
+    # normalize
+    norms = np.linalg.norm(ned, axis=1, keepdims=True)
+    ned = ned / np.where(norms < 1e-12, 1.0, norms)
 
-    if np.hypot(ned[0], ned[1]) < eps:
-        azm = 0.0
-    else:
-        azm = (np.rad2deg(np.arctan2(ned[1], ned[0])) + 360.0) % 360.0
+    # canonicalize D >= 0
+    mask = ned[:, 2] < 0
+    ned[mask] *= -1
 
-    return np.array([plunge, azm], dtype=float)
+    plunge = np.rad2deg(np.arcsin(np.clip(ned[:, 2], -1.0, 1.0)))
+    azimuth = np.rad2deg(np.arctan2(ned[:, 1], ned[:, 0])) % 360.0
+
+    # near-vertical: azimuth undefined, return 0
+    horiz = np.hypot(ned[:, 0], ned[:, 1])
+    azimuth = np.where(horiz < 1e-12, 0.0, azimuth)
+
+    if scalar:
+        return float(plunge[0]), float(azimuth[0])
+    return plunge, azimuth
 
 
-def line_sphe2enu(sphe):
+def line_sphe2enu(plunge, azimuth):
     """
-    Transform a line element from spherical coordinates to cartesian ENU.
+    Spherical line coordinates to ENU unit axis.
 
     Parameters
     ----------
-    sphe : array-like, shape (2,)
-        Spherical line coordinates [plunge, azm] in degrees, where:
-          - azm is azimuth clockwise from North.
-          - plunge is positive downward from horizontal.
+    plunge : float or array-like
+    azimuth : float or array-like
 
     Returns
     -------
-    numpy.ndarray, shape (3,)
-        Unit line direction cosines in ENU coordinates: [E, N, U].
-
-    Notes
-    -----
-    This uses the NED spherical convention (plunge positive downward) and then
-    converts NED -> ENU. Line elements are treated as axes and canonicalized
-    to be down-directed in NED (D >= 0).
+    numpy.ndarray, shape (3,) or (N, 3)
     """
-    ned = line_sphe2ned(sphe)
-    return ned_to_enu(ned)
+    return ned2enu(line_sphe2ned(plunge, azimuth))
 
 
-def line_enu2sphe(enu, eps=1e-12):
+def line_enu2sphe(enu):
     """
-    Transform a line element from cartesian ENU coordinates to spherical.
+    ENU unit axis to spherical line coordinates.
 
     Parameters
     ----------
-    enu : array-like, shape (3,)
-        Line direction cosines in ENU coordinates: [E, N, U]. The input may be
-        non-unit; it will be normalized internally via conversion to NED.
-    eps : float
-        Threshold to treat a line as near-vertical when computing azimuth.
+    enu : array-like, shape (3,) or (N, 3)
 
     Returns
     -------
-    numpy.ndarray, shape (2,)
-        Spherical line coordinates [plunge, azm] in degrees (NED convention):
-          - azm is azimuth clockwise from North in [0, 360)
-          - plunge is positive downward in [0, 90]
+    plunge : float or numpy.ndarray, shape (N,)
+    azimuth : float or numpy.ndarray, shape (N,)
     """
-    ned = enu_to_ned(enu)
-    return line_ned2sphe(ned, eps=eps)
+    return line_ned2sphe(enu2ned(enu))
 
 
-def line_rake2sphe(rake):
+# plane basis
+
+def plane_basis_enu(strike, dip):
     """
-    Transform a line defined by plane strike/dip and rake into spherical line coordinates.
+    Orthonormal basis vectors of a fault plane in ENU.
+
+    Returns the strike direction, the dip vector (steepest descent line
+    in the plane), and the plane normal. All three are mutually
+    orthogonal unit vectors forming a right-handed basis.
+
+    The dip vector plunges at the dip angle toward azimuth
+    ``strike + 90°``. The normal points away from the dipping side
+    (upward for non-vertical planes after canonicalization).
 
     Parameters
     ----------
-    rake : array-like, shape (3,)
-        [strike, dip, rake] in degrees. Strike/dip follow the right-hand rule
-        convention. Rake is measured within the plane from the strike direction.
+    strike : float or array-like
+    dip : float or array-like
 
     Returns
     -------
-    numpy.ndarray, shape (2,)
-        [plunge, azm] in degrees.
-
-    Raises
-    ------
-    ValueError
-        If input shape is invalid or rake is not within [0, 180].
+    strike_dir : numpy.ndarray, shape (3,) or (N, 3)
+        Horizontal unit vector along the strike azimuth.
+    dip_vec : numpy.ndarray, shape (3,) or (N, 3)
+        Unit vector plunging at the dip angle toward the dip direction.
+    normal : numpy.ndarray, shape (3,) or (N, 3)
+        Unit normal to the plane (= strike_dir × dip_vec).
     """
+    strike = np.asarray(strike, dtype=float)
+    dip = np.asarray(dip, dtype=float)
+    scalar = strike.ndim == 0 and dip.ndim == 0
+
+    s = np.deg2rad(strike)
+    d = np.deg2rad(dip)
+    da = s + np.pi / 2.0
+
+    strike_dir = np.stack([np.sin(s), np.cos(s), np.zeros_like(s)], axis=-1)
+    dip_vec = np.stack([
+        np.sin(da) * np.cos(d),
+        np.cos(da) * np.cos(d),
+        -np.sin(d),
+    ], axis=-1)
+    normal = np.cross(strike_dir, dip_vec)
+
+    if scalar:
+        return strike_dir.squeeze(), dip_vec.squeeze(), normal.squeeze()
+    return strike_dir, dip_vec, normal
+
+
+# line-rake conversions (axis, unsigned rake [0, 180])
+
+def line_rake2sphe(strike, dip, rake):
+    """
+    Unsigned rake on a plane to spherical line coordinates.
+
+    Parameters
+    ----------
+    strike : float or array-like
+    dip : float or array-like
+    rake : float or array-like
+        Unsigned rake in degrees [0, 180].
+
+    Returns
+    -------
+    plunge : float or numpy.ndarray, shape (N,)
+    azimuth : float or numpy.ndarray, shape (N,)
+    """
+    strike = np.asarray(strike, dtype=float)
+    dip = np.asarray(dip, dtype=float)
     rake = np.asarray(rake, dtype=float)
-    if rake.shape != (3,):
-        raise ValueError("rake must be a length-3 array: [strike, dip, rake].")
-    if rake[2] < 0 or rake[2] > 180:
-        raise ValueError("Rake angle is not within 0 and 180 deg")
+    scalar = strike.ndim == 0 and dip.ndim == 0 and rake.ndim == 0
 
-    strike = np.deg2rad(rake[0])
-    dip = np.deg2rad(rake[1])
-    r = np.deg2rad(rake[2])
+    s = np.deg2rad(strike)
+    d = np.deg2rad(dip)
+    r = np.deg2rad(rake)
 
-    plunge = np.rad2deg(np.arcsin(np.clip(np.sin(r) * np.sin(dip), -1.0, 1.0)))
-    azm = np.rad2deg(strike + np.arctan2(np.cos(dip) * np.sin(r), np.cos(r)))
+    plunge = np.rad2deg(np.arcsin(np.clip(np.sin(r) * np.sin(d), -1.0, 1.0)))
+    azimuth = np.rad2deg(s + np.arctan2(np.cos(d) * np.sin(r), np.cos(r)))
 
-    if plunge < 0.0:
-        azm += 180.0
+    # canonicalize: if plunge < 0, flip azimuth and take abs(plunge)
+    flip = plunge < 0
+    azimuth = np.where(flip, azimuth + 180.0, azimuth)
+    plunge = np.abs(plunge)
+    azimuth = azimuth % 360.0
 
-    azm = (azm + 360.0) % 360.0
+    if scalar:
+        return float(plunge), float(azimuth)
+    return plunge, azimuth
 
-    return np.array([abs(plunge), azm], dtype=float)
 
-
-def plane_sphe2ned(sphe, eps=1e-12):
+def line_enu2rake(enu, strike, dip, check=False, tol=5e-3):
     """
-    Convert a plane (strike/dip) to the NED unit normal vector.
+    ENU axis on a plane to unsigned rake.
+
+    Projects the vector onto the plane's strike and updip directions
+    and returns the angle in [0, 180]. Since lines are axes (v and -v
+    equivalent), the result is the same for both orientations.
 
     Parameters
     ----------
-    sphe : array-like, shape (2,)
-        Plane spherical coordinates [strike, dip] in degrees.
-    eps : float
-        Tolerance used to detect degenerate cases and near-horizontal normals.
-
-    Returns
-    -------
-    numpy.ndarray, shape (3,)
-        Unit normal vector in NED coordinates: [N, E, D].
-
-    Notes
-    -----
-    The normal is canonicalized to be down-directed (D >= 0). When D is near zero,
-    a deterministic sign is chosen.
-    """
-    sphe = np.asarray(sphe, dtype=float)
-    if sphe.shape != (2,):
-        raise ValueError("sphe must be a length-2 array: [strike, dip].")
-
-    v1 = line_sphe2ned([0.0, sphe[0]])
-    v2 = line_sphe2ned([sphe[1], sphe[0] + 90.0])
-
-    cr = np.cross(v1, v2)
-    nrm = np.linalg.norm(cr)
-    if nrm < eps:
-        raise ValueError("Degenerate plane definition (normal is undefined).")
-
-    n = cr / nrm
-
-    if abs(n[2]) < eps and n[1] > 0:
-        n *= -1.0
-
-    if n[2] < 0:
-        n *= -1.0
-
-    return n
-
-
-def plane_sphe2enu(sphe, eps=1e-12):
-    """
-    Convert a plane (strike/dip) to the ENU unit normal vector.
-
-    Parameters
-    ----------
-    sphe : array-like, shape (2,)
-        Plane spherical coordinates [strike, dip] in degrees.
-    eps : float
-        Tolerance used to detect degenerate cases and near-horizontal normals.
-
-    Returns
-    -------
-    numpy.ndarray, shape (3,)
-        Unit normal vector in ENU coordinates: [E, N, U].
-
-    Notes
-    -----
-    The normal is canonicalized to be up-directed (U >= 0). When U is near zero,
-    a deterministic sign is chosen.
-    """
-    sphe = np.asarray(sphe, dtype=float)
-    if sphe.shape != (2,):
-        raise ValueError("sphe must be a length-2 array: [strike, dip].")
-
-    v1 = line_sphe2enu([0.0, sphe[0]])
-    v2 = line_sphe2enu([sphe[1], sphe[0] + 90.0])
-
-    cr = np.cross(v1, v2)
-    nrm = np.linalg.norm(cr)
-    if nrm < eps:
-        raise ValueError("Degenerate plane definition (normal is undefined).")
-
-    n = cr / nrm
-
-    if abs(n[2]) < eps and n[0] < 0:
-        n *= -1.0
-
-    if n[2] < 0:
-        n *= -1.0
-
-    return n
-
-
-def plane_pole2sphe(sphe):
-    """
-    Convert a plane pole (line spherical coordinates) to plane strike/dip.
-
-    Parameters
-    ----------
-    sphe : array-like, shape (2,)
-        Pole spherical coordinates [plunge, azm] in degrees.
-
-    Returns
-    -------
-    numpy.ndarray, shape (2,)
-        Plane spherical coordinates [strike, dip] in degrees.
-    """
-    sphe = np.asarray(sphe, dtype=float)
-    if sphe.shape != (2,):
-        raise ValueError("sphe must be a length-2 array: [plunge, azm].")
-
-    strike = (sphe[1] + 90.0) % 360.0
-    dip = 90.0 - sphe[0]
-
-    return np.array([strike, dip], dtype=float)
-
-
-def lineplane2rake(enu, plane, tol=5e-3, eps=1e-12):
-    """
-    Transform a line (ENU) contained within a plane (strike/dip) into strike/dip/rake.
-
-    Parameters
-    ----------
-    enu : array-like, shape (3,)
-        Line direction in ENU coordinates [E, N, U]. Treated as an axis.
-    plane : array-like, shape (2,)
-        Plane spherical coordinates [strike, dip] in degrees.
+    enu : array-like, shape (3,) or (N, 3)
+    strike : float
+    dip : float
+    check : bool
+        If True, verify the line lies in the plane (scalar input only).
     tol : float
-        Tolerance for the scalar triple product containment test (unit vectors).
-    eps : float
-        Threshold for near-parallel/degenerate checks.
+        Tolerance for the containment check.
 
     Returns
     -------
-    numpy.ndarray, shape (3,)
-        [strike, dip, rake] in degrees, with rake in [0, 180].
-
-    Raises
-    ------
-    ValueError
-        If input shapes are invalid or the plane basis is degenerate.
-    Exception
-        If the line is not contained within the plane (within tolerance).
+    rake : float or numpy.ndarray
+        Unsigned rake in degrees [0, 180].
     """
-    plane = np.asarray(plane, dtype=float)
-    if plane.shape != (2,):
-        raise ValueError("plane must be a length-2 array: [strike, dip].")
+    enu = np.asarray(enu, dtype=float)
+    scalar = enu.ndim == 1
+    if scalar:
+        enu = enu[None, :]
 
-    enu = unit(enu)
+    # normalize
+    norms = np.linalg.norm(enu, axis=1, keepdims=True)
+    enu = enu / np.where(norms < 1e-12, 1.0, norms)
 
-    rho = unit(line_sphe2enu([0.0, plane[0]]))
-    mu = unit(line_sphe2enu(line_rake2sphe(np.array([plane[0], plane[1], 90.0]))))
+    strike_dir, dip_vec, normal = plane_basis_enu(strike, dip)
 
-    n = np.cross(rho, mu)
-    nn = np.linalg.norm(n)
-    if nn < eps:
-        raise ValueError("Degenerate plane basis (rho and mu nearly parallel).")
-    n = n / nn
+    if check and scalar:
+        proj = np.abs(enu[0] @ normal)
+        if proj > tol:
+            raise ValueError(
+                f"Line is not contained in the plane "
+                f"(normal projection = {proj:.5e}, tol = {tol})."
+            )
 
-    trp = abs(np.linalg.det(np.vstack((enu, mu, rho))))
-    if trp > tol:
-        raise Exception(
-            "Line is not contained within the plane.\n "
-            "  scalar triple prod:  %.5e" % trp
-        )
+    cs = enu @ strike_dir
+    cu = enu @ (-dip_vec)  # updip component
+    rake = np.rad2deg(np.arctan2(cu, cs))
 
-    c = float(np.clip(np.dot(rho, enu), -1.0, 1.0))
-    r = float(np.rad2deg(np.arccos(c)))
+    # canonicalize to [0, 180]: axis ambiguity
+    rake = rake % 360.0
+    rake = np.where(rake > 180.0, 360.0 - rake, rake)
 
-    R_hat = np.cross(rho, enu)
-    Rn = np.linalg.norm(R_hat)
-    if Rn < eps:
-        r = 0.0 if c >= 0.0 else 180.0
-        return np.array([plane[0], plane[1], r], dtype=float)
+    if scalar:
+        return float(rake[0])
+    return rake
 
-    R_hat = R_hat / Rn
-    if np.dot(R_hat, n) > 0.0:
-        r = 180.0 - r
 
-    return np.array([plane[0], plane[1], r], dtype=float)
+# slip (directed) conversions — signed rake, Aki & Richards (-180, 180]
+
+def slip_rake2enu(strike, dip, rake):
+    """
+    Signed rake to directed slip vector in ENU.
+
+    Uses the Aki & Richards convention:
+
+    - rake > 0: reverse/thrust (hanging wall up).
+    - rake < 0: normal (hanging wall down).
+    - rake = 0: pure left-lateral.
+    - rake = +/-180: pure right-lateral.
+
+    Parameters
+    ----------
+    strike : float or array-like
+    dip : float or array-like
+    rake : float or array-like
+        Signed rake in degrees (-180, 180].
+
+    Returns
+    -------
+    numpy.ndarray, shape (3,) or (N, 3)
+        Directed unit slip vector in ENU.
+    """
+    strike = np.asarray(strike, dtype=float)
+    dip = np.asarray(dip, dtype=float)
+    rake = np.asarray(rake, dtype=float)
+    scalar = strike.ndim == 0 and dip.ndim == 0 and rake.ndim == 0
+
+    r = np.deg2rad(rake)
+    strike_dir, dip_vec, _ = plane_basis_enu(strike, dip)
+
+    slip = np.cos(r)[..., None] * strike_dir + np.sin(r)[..., None] * (-dip_vec)
+
+    norms = np.linalg.norm(slip, axis=-1, keepdims=True)
+    slip = slip / np.where(norms < 1e-12, 1.0, norms)
+
+    return slip.squeeze() if scalar else slip
+
+
+def slip_enu2rake(enu, strike, dip):
+    """
+    Directed ENU vector to signed rake (Aki & Richards).
+
+    Projects the vector onto the fault plane's strike and updip directions
+    and returns ``atan2(updip_component, strike_component)`` in degrees.
+
+    Parameters
+    ----------
+    enu : array-like, shape (3,) or (N, 3)
+    strike : float
+    dip : float
+
+    Returns
+    -------
+    rake : float or numpy.ndarray
+        Signed rake in degrees (-180, 180].
+    """
+    enu = np.asarray(enu, dtype=float)
+    scalar = enu.ndim == 1
+    if scalar:
+        enu = enu[None, :]
+
+    strike_dir, dip_vec, _ = plane_basis_enu(strike, dip)
+
+    cs = enu @ strike_dir
+    cu = enu @ (-dip_vec)  # updip component
+    rake = np.rad2deg(np.arctan2(cu, cs))
+
+    if scalar:
+        return float(rake[0])
+    return rake
+
+
+# plane normal conversions
+
+def plane_sphe2enu(strike, dip):
+    """
+    Plane (strike/dip) to ENU unit normal, canonicalized U >= 0.
+
+    Computes the normal as the cross product of the strike direction
+    (horizontal, azimuth = strike) and the dip vector (plunging at the
+    dip angle toward azimuth = strike + 90°). Both lie in the plane,
+    so their cross product is the true geometric normal.
+
+    Parameters
+    ----------
+    strike : float or array-like
+    dip : float or array-like
+
+    Returns
+    -------
+    numpy.ndarray, shape (3,) or (N, 3)
+    """
+    strike = np.asarray(strike, dtype=float)
+    dip = np.asarray(dip, dtype=float)
+    scalar = strike.ndim == 0 and dip.ndim == 0
+
+    # v1: strike direction in ENU (plunge=0, azimuth=strike)
+    v1 = line_sphe2enu(np.zeros_like(strike), strike)
+
+    # v2: dip vector in ENU (plunge=dip, azimuth=strike+90)
+    v2 = line_sphe2enu(dip, strike + 90.0)
+
+    n = np.cross(v1, v2)
+    norms = np.linalg.norm(n, axis=-1, keepdims=True)
+    n = n / np.where(norms < 1e-12, 1.0, norms)
+
+    # canonicalize U >= 0 (handle vertical planes where U ~ 0)
+    if n.ndim == 1:
+        if abs(n[2]) < 1e-12 and n[0] < 0:
+            n *= -1
+        elif n[2] < 0:
+            n *= -1
+    else:
+        vert = np.abs(n[..., 2]) < 1e-12
+        flip_vert = vert & (n[..., 0] < 0)
+        flip_down = ~vert & (n[..., 2] < 0)
+        n[flip_vert] *= -1
+        n[flip_down] *= -1
+
+    return n.squeeze() if scalar else n
+
+
+def plane_sphe2ned(strike, dip):
+    """
+    Plane (strike/dip) to NED unit normal, canonicalized D >= 0.
+
+    Computes the normal as the cross product of the strike direction
+    and the dip vector, both in NED coordinates.
+
+    Parameters
+    ----------
+    strike : float or array-like
+    dip : float or array-like
+
+    Returns
+    -------
+    numpy.ndarray, shape (3,) or (N, 3)
+    """
+    strike = np.asarray(strike, dtype=float)
+    dip = np.asarray(dip, dtype=float)
+    scalar = strike.ndim == 0 and dip.ndim == 0
+
+    # v1: strike direction in NED (plunge=0, azimuth=strike)
+    v1 = line_sphe2ned(np.zeros_like(strike), strike)
+
+    # v2: dip vector in NED (plunge=dip, azimuth=strike+90)
+    v2 = line_sphe2ned(dip, strike + 90.0)
+
+    n = np.cross(v1, v2)
+    norms = np.linalg.norm(n, axis=-1, keepdims=True)
+    n = n / np.where(norms < 1e-12, 1.0, norms)
+
+    # canonicalize D >= 0 (handle horizontal normals)
+    if n.ndim == 1:
+        if abs(n[2]) < 1e-12 and n[1] > 0:
+            n *= -1
+        elif n[2] < 0:
+            n *= -1
+    else:
+        horiz = np.abs(n[..., 2]) < 1e-12
+        flip_horiz = horiz & (n[..., 1] > 0)
+        flip_up = ~horiz & (n[..., 2] < 0)
+        n[flip_horiz] *= -1
+        n[flip_up] *= -1
+
+    return n.squeeze() if scalar else n
+
+
+def plane_pole2sphe(plunge, azimuth):
+    """
+    Plane pole (plunge/azimuth) to strike/dip.
+
+    Parameters
+    ----------
+    plunge : float or array-like
+    azimuth : float or array-like
+
+    Returns
+    -------
+    strike : float or numpy.ndarray
+    dip : float or numpy.ndarray
+    """
+    plunge = np.asarray(plunge, dtype=float)
+    azimuth = np.asarray(azimuth, dtype=float)
+    scalar = plunge.ndim == 0 and azimuth.ndim == 0
+
+    strike = (azimuth + 90.0) % 360.0
+    dip = 90.0 - plunge
+
+    if scalar:
+        return float(strike), float(dip)
+    return strike, dip

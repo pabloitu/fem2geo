@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from fem2geo import transform as tr
+from fem2geo.utils import transform as tr
 import fem2geo.utils.tensor as tm
 
 
@@ -34,7 +34,6 @@ class TestTensor(unittest.TestCase):
             tm.rot_matrix(10.0, 4)
 
     def test_rot_tensor_invariants(self):
-        # symmetric tensor with distinct eigenvalues
         T = np.array([[3.0, 0.2, -0.1],
                       [0.2, 2.0,  0.3],
                       [-0.1, 0.3, 1.0]], dtype=float)
@@ -52,7 +51,6 @@ class TestTensor(unittest.TestCase):
                 self.aclose(np.linalg.norm(Tr), fn0, places=9)
 
     def test_resolved_shear_isotropic(self):
-        # isotropic stress => traction parallel to normal => shear = 0
         S = 5.0 * np.eye(3)
 
         planes = [
@@ -66,7 +64,6 @@ class TestTensor(unittest.TestCase):
             self.aclose(tau, 0.0, places=12)
             self.mclose(tau_hat, [0.0, 0.0, 0.0], atol=1e-12)
 
-        # also via normals
         n = np.array([1.0, 0.0, 0.0])
         tau, tau_hat = tm.resolved_shear_enu(S, normal=n)
         self.aclose(tau, 0.0, places=12)
@@ -77,7 +74,7 @@ class TestTensor(unittest.TestCase):
 
         # scalar plane
         p = np.array([30.0, 60.0])
-        n = tr.plane_sphe2enu(p)
+        n = tr.plane_sphe2enu(p[0], p[1])
         a = tm.slip_tendency(S, planes=p)
         b = tm.slip_tendency(S, normals=n)
         self.assertTrue(np.isscalar(a))
@@ -88,7 +85,7 @@ class TestTensor(unittest.TestCase):
         P = np.array([[0.0, 10.0],
                       [30.0, 60.0],
                       [120.0, 45.0]], dtype=float)
-        N = np.array([tr.plane_sphe2enu(x) for x in P], dtype=float)
+        N = tr.plane_sphe2enu(P[:, 0], P[:, 1])
         A = tm.slip_tendency(S, planes=P)
         B = tm.slip_tendency(S, normals=N)
         self.assertEqual(A.shape, (3,))
@@ -99,7 +96,7 @@ class TestTensor(unittest.TestCase):
         S = np.diag([1.0, 2.0, 3.0])
 
         p = np.array([30.0, 60.0])
-        n = tr.plane_sphe2enu(p)
+        n = tr.plane_sphe2enu(p[0], p[1])
         a = tm.dilation_tendency(S, planes=p)
         b = tm.dilation_tendency(S, normals=n)
         self.assertTrue(np.isscalar(a))
@@ -109,7 +106,7 @@ class TestTensor(unittest.TestCase):
         P = np.array([[0.0, 10.0],
                       [30.0, 60.0],
                       [120.0, 45.0]], dtype=float)
-        N = np.array([tr.plane_sphe2enu(x) for x in P], dtype=float)
+        N = tr.plane_sphe2enu(P[:, 0], P[:, 1])
         A = tm.dilation_tendency(S, planes=P)
         B = tm.dilation_tendency(S, normals=N)
         self.assertEqual(A.shape, (3,))
@@ -117,14 +114,12 @@ class TestTensor(unittest.TestCase):
         self.mclose(A, B, atol=1e-9)
 
     def test_slip_sigma_n_zero(self):
-        # Construct stress so that sigma_n = n·S·n = 0 for n = [1,0,0]
         S = np.diag([0.0, 2.0, 3.0])
         n = np.array([1.0, 0.0, 0.0])
 
         ts = tm.slip_tendency(S, normals=n, eps=1e-14)
         self.assertTrue(np.isinf(ts))
 
-        # for isotropic with sigma_n != 0 => slip is 0 (shear 0)
         S2 = 5.0 * np.eye(3)
         ts2 = tm.slip_tendency(S2, normals=n)
         self.aclose(ts2, 0.0, places=12)
