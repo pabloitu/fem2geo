@@ -81,6 +81,12 @@ class PlotConfig:
                 "sigma": self.sigma, "linewidth": self.linewidth,
                 "alpha": self.alpha}
 
+    def as_kwargs(self, style: str, marker: str = "o") -> dict:
+        """Return scatter or contour kwargs based on style string."""
+        if style == "contour":
+            return self.contour_kwargs()
+        return self.scatter_kwargs(marker)
+
 
 def stereo_field(ax, mesh_strikes, mesh_dips, values,
                  cmap="RdYlBu_r", vmin=None, vmax=None,

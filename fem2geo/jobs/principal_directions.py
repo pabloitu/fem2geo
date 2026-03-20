@@ -82,13 +82,13 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     avg_cfg = plot_cfg.get("avg_directions", {})
     cell_cfg = plot_cfg.get("cell_directions", {})
-    show_avg = avg_cfg.get("show", True)
-    show_cell = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")
+    show_avg = avg_cfg.pop("show", True)
+    show_cell = cell_cfg.pop("show", False)
+    cell_style = cell_cfg.pop("style", "scatter")
 
     avg_style = PlotConfig.avg().update(avg_cfg)
-    cell_style_cfg = (PlotConfig.density() if cell_style == "contour"
-                      else PlotConfig.cell()).update(cell_cfg)
+    cell_pc = (PlotConfig.density() if cell_style == "contour"
+               else PlotConfig.cell()).update(cell_cfg)
 
     if "models" in cfg:
         model_paths = cfg["models"]
@@ -120,28 +120,27 @@ def run(cfg: dict, job_dir: Path) -> None:
 
         model = Model.from_file(path, schema)
 
-        model = model.extract(zone_cfg)
+        if zone_cfg["type"] == "sphere":
+            model = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
+        elif zone_cfg["type"] == "box":
+            model = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
 
         log.info(f"  {model.n_cells} cells in zone")
 
         if save_vtu:
             model.save(out_dir / f"{name}_extract.vtu")
 
-        # Cell directions (batched — single call per principal direction)
+        # Cell directions (batched)
         if show_cell:
             p1, a1 = line_enu2sphe(model.dir_s1)
             p2, a2 = line_enu2sphe(model.dir_s2)
             p3, a3 = line_enu2sphe(model.dir_s3)
-            cell_pc = PlotConfig.from_cfg(cell_style_cfg, {"color": color})
+            cpc = PlotConfig.from_cfg(cell_pc, {"color": color})
+            fn = stereo_contour if cell_style == "contour" else stereo_line
 
-            if cell_style == "contour":
-                stereo_contour(ax, p1, a1, **cell_pc.contour_kwargs())
-                stereo_contour(ax, p2, a2, **cell_pc.contour_kwargs())
-                stereo_contour(ax, p3, a3, **cell_pc.contour_kwargs())
-            else:
-                stereo_line(ax, p1, a1, **cell_pc.scatter_kwargs("o"))
-                stereo_line(ax, p2, a2, **cell_pc.scatter_kwargs("s"))
-                stereo_line(ax, p3, a3, **cell_pc.scatter_kwargs("v"))
+            fn(ax, p1, a1, **cpc.as_kwargs(cell_style, "o"))
+            fn(ax, p2, a2, **cpc.as_kwargs(cell_style, "s"))
+            fn(ax, p3, a3, **cpc.as_kwargs(cell_style, "v"))
 
         # Average stress principal directions
         if show_avg:

@@ -99,8 +99,8 @@ def run(cfg: dict, job_dir: Path) -> None:
     cell_style = cell_cfg.get("style", "scatter")
 
     avg_style = PlotConfig.avg().update(avg_cfg)
-    cell_style_cfg = (PlotConfig.density() if cell_style == "contour"
-                      else PlotConfig.cell()).update(cell_cfg)
+    cell_pc = (PlotConfig.density() if cell_style == "contour"
+               else PlotConfig.cell()).update(cell_cfg)
 
     if "data" not in cfg or not cfg["data"]:
         raise ValueError("Config must contain a non-empty 'data' section.")
@@ -114,7 +114,12 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
 
-    sub = model.extract(zone_cfg)
+    if zone_cfg["type"] == "sphere":
+        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
+    elif zone_cfg["type"] == "box":
+        sub = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
+    else:
+        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
 
     log.info(f"  {sub.n_cells} cells in zone")
 
@@ -160,16 +165,11 @@ def run(cfg: dict, job_dir: Path) -> None:
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
         p3, a3 = line_enu2sphe(sub.dir_s3)
-        cell_pc = cell_style_cfg
+        fn = stereo_contour if cell_style == "contour" else stereo_line
 
-        if cell_style == "contour":
-            stereo_contour(ax, p1, a1, **cell_pc.contour_kwargs())
-            stereo_contour(ax, p2, a2, **cell_pc.contour_kwargs())
-            stereo_contour(ax, p3, a3, **cell_pc.contour_kwargs())
-        else:
-            stereo_line(ax, p1, a1, **cell_pc.scatter_kwargs("o"))
-            stereo_line(ax, p2, a2, **cell_pc.scatter_kwargs("s"))
-            stereo_line(ax, p3, a3, **cell_pc.scatter_kwargs("v"))
+        fn(ax, p1, a1, **cell_pc.as_kwargs(cell_style, "o"))
+        fn(ax, p2, a2, **cell_pc.as_kwargs(cell_style, "s"))
+        fn(ax, p3, a3, **cell_pc.as_kwargs(cell_style, "v"))
 
     # ── Average principal directions ──────────────────────────────────────────
     if show_avg:
