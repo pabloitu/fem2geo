@@ -45,11 +45,11 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-dev = [
-    "black",
-    "flake8",
+test = [
     "pytest",
     "pytest-cov",
+]
+docs = [
     "sphinx",
     "sphinx-autoapi",
     "sphinx_design",
@@ -57,6 +57,13 @@ dev = [
     "sphinx-gallery",
     "sphinx-rtd-theme",
     "sphinx_copybutton",
+]
+lint = [
+    "black",
+    "flake8",
+]
+dev = [
+    "fem2geo[test,docs,lint]",
 ]
 
 [project.urls]

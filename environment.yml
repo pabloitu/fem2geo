@@ -9,4 +9,5 @@ dependencies:
   - meshio
   - pyvista
   - mplstereonet
+  - pyyaml
 
