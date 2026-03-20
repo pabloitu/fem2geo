@@ -77,9 +77,9 @@ from matplotlib.lines import Line2D
 
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
-from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import PlotConfig, stereo_line, stereo_contour
+from fem2geo.runner import parse_config
 from fem2geo.utils.tensor import kostrov_tensor
 from fem2geo.utils import transform as tr
 from fem2geo.utils.transform import line_enu2sphe
@@ -89,21 +89,18 @@ log = logging.getLogger("fem2geoLogger")
 
 def run(cfg: dict, job_dir: Path) -> None:
     # config
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"), units=cfg.get("units"))
-    zone_cfg = cfg["zone"]
-    plot_cfg = cfg.get("plot", {})
-    out_cfg = cfg.get("output", {})
+    schema, zone, data, plot, out = parse_config(cfg, job_dir)
 
-    title = plot_cfg.get("title", "Kostrov analysis")
-    figsize = plot_cfg.get("figsize", [8, 8])
-    dpi = plot_cfg.get("dpi", 200)
-    out_dir = Path(out_cfg.get("dir", job_dir))
-    save_vtu = out_cfg.get("save_vtu", False)
+    title = plot.get("title", "Kostrov analysis")
+    figsize = plot.get("figsize", [8, 8])
+    dpi = plot.get("dpi", 200)
+    out_dir = Path(out.get("dir", job_dir))
+    save_vtu = out.get("save_vtu", False)
     compare = cfg.get("compare", "stress_dev")
 
-    kostrov_cfg = plot_cfg.get("kostrov", {})
-    model_cfg = plot_cfg.get("model", {})
-    cell_cfg = plot_cfg.get("cell_directions", {})
+    kostrov_cfg = plot.get("kostrov", {})
+    model_cfg = plot.get("model", {})
+    cell_cfg = plot.get("cell_directions", {})
     k_style = PlotConfig.avg(color=kostrov_cfg.get("color", "#E63946")).update(kostrov_cfg)
     m_style = PlotConfig.avg(color=model_cfg.get("color", "#2196F3")).update(model_cfg)
 
@@ -113,7 +110,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                       else PlotConfig.cell(color="grey")).update(
         cell_cfg if isinstance(cell_cfg, dict) else {})
 
-    data_cfg = plot_cfg.get("data_spread", {})
+    data_cfg = plot.get("data_spread", {})
     show_data = data_cfg.get("show", False) if isinstance(data_cfg, dict) else data_cfg
     data_style = data_cfg.get("style", "scatter") if isinstance(data_cfg, dict) else "scatter"
     data_style_cfg = (PlotConfig.density() if data_style == "contour"
@@ -132,7 +129,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
 
-    sub = model.extract(zone_cfg)
+    sub = model.extract(zone)
 
     log.info(f"  {sub.n_cells} cells in zone")
 

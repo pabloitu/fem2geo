@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from fem2geo.internal.logger import setup_logger
+from fem2geo.internal.schema import ModelSchema
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -17,6 +18,18 @@ _JOBS = {
     "kostrov_analysis":     "fem2geo.jobs.kostrov_analysis",
 }
 
+
+def parse_config(cfg, job_dir):
+    schema = ModelSchema.builtin(
+        cfg.get("schema", "adeli"), units=cfg.get("units")
+    )
+    zone = cfg.get("zone", {})
+    data = cfg.get("data", {})
+    plot = cfg.get("plot", {})
+    out = cfg.get("output", {})
+    out["dir"] = Path(out.get("dir", job_dir))
+    out["dir"].mkdir(parents=True, exist_ok=True)
+    return schema, zone, data, plot, out
 
 def _load_config(path: Path) -> dict:
     with open(path) as f:

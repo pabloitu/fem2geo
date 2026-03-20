@@ -61,9 +61,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fem2geo.internal.schema import ModelSchema
+from fem2geo import runner
 from fem2geo.model import Model
 from fem2geo.plots import PlotConfig, stereo_field, stereo_line, stereo_contour
+from fem2geo.runner import parse_config
 from fem2geo.utils.tensor import slip_tendency, dilation_tendency, combined_tendency
 from fem2geo.utils.transform import line_enu2sphe, grid_nodes, grid_centers
 
@@ -108,21 +109,17 @@ def _compute_field(sigma, kind, n_strikes, n_dips):
 
 def run(cfg: dict, job_dir: Path) -> None:
     # config
-    schema = ModelSchema.builtin(
-        cfg.get("schema", "adeli"), units=cfg.get("units"))
-    zone_cfg = cfg["zone"]
-    plot_cfg = cfg.get("plot", {})
-    out_cfg = cfg.get("output", {})
+    schema, zone, data, plot, out = parse_config(cfg, job_dir)
 
-    tendency = plot_cfg.get("tendency", "both")
-    dpi = plot_cfg.get("dpi", 200)
-    n_strikes = plot_cfg.get("n_strikes", 180)
-    n_dips = plot_cfg.get("n_dips", 45)
-    out_dir = Path(out_cfg.get("dir", job_dir))
-    save_vtu = out_cfg.get("save_vtu", False)
+    tendency = plot.get("tendency", "both")
+    dpi = plot.get("dpi", 200)
+    n_strikes = plot.get("n_strikes", 180)
+    n_dips = plot.get("n_dips", 45)
+    out_dir = Path(out.get("dir", job_dir))
+    save_vtu = out.get("save_vtu", False)
 
-    avg_cfg = plot_cfg.get("avg_directions", {})
-    cell_cfg = plot_cfg.get("cell_directions", {})
+    avg_cfg = plot.get("avg_directions", {})
+    cell_cfg = plot.get("cell_directions", {})
     show_avg = avg_cfg.get("show", True)
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
@@ -147,13 +144,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {path}")
     model = Model.from_file(path, schema)
 
-    if zone_cfg["type"] == "sphere":
-        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-    elif zone_cfg["type"] == "box":
-        sub = model.extract_box(
-            zone_cfg["center"], np.asarray(zone_cfg["dim"]))
-    else:
-        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
+    sub = model.extract(zone)
 
     log.info(f"  {sub.n_cells} cells in zone")
 
@@ -170,9 +161,9 @@ def run(cfg: dict, job_dir: Path) -> None:
     # figure layout
     is_double = tendency == "both"
     if is_double:
-        figsize = plot_cfg.get("figsize", [16, 7])
+        figsize = plot.get("figsize", [16, 7])
     else:
-        figsize = plot_cfg.get("figsize", [8, 8])
+        figsize = plot.get("figsize", [8, 8])
 
     fig = plt.figure(figsize=figsize)
 
@@ -221,7 +212,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     # titles and legends
     suffix = (f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$,"
               f" $\\phi={phi:.2f}$")
-    custom_title = plot_cfg.get("title", "")
+    custom_title = plot.get("title", "")
 
     for kind, ax in panels.items():
         t = custom_title if custom_title else _TITLES[kind] + suffix

@@ -63,17 +63,16 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.lines import Line2D
 
-from fem2geo.data import FractureData, FaultData
+from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
-from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
     PlotConfig, MODEL_COLORS,
     stereo_line, stereo_pole, stereo_contour,
 )
+from fem2geo.runner import parse_config
 from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
@@ -81,19 +80,16 @@ log = logging.getLogger("fem2geoLogger")
 
 def run(cfg: dict, job_dir: Path) -> None:
     # config
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"), units=cfg.get("units"))
-    zone_cfg = cfg["zone"]
-    plot_cfg = cfg.get("plot", {})
-    out_cfg = cfg.get("output", {})
+    schema, zone, data, plot, out = parse_config(cfg, job_dir)
 
-    title = plot_cfg.get("title", "Model vs structural data")
-    figsize = plot_cfg.get("figsize", [8, 8])
-    dpi = plot_cfg.get("dpi", 200)
-    out_dir = Path(out_cfg.get("dir", job_dir))
-    save_vtu = out_cfg.get("save_vtu", False)
+    title = plot.get("title", "Model vs structural data")
+    figsize = plot.get("figsize", [8, 8])
+    dpi = plot.get("dpi", 200)
+    out_dir = Path(out.get("dir", job_dir))
+    save_vtu = out.get("save_vtu", False)
 
-    avg_cfg = plot_cfg.get("avg_directions", {})
-    cell_cfg = plot_cfg.get("cell_directions", {})
+    avg_cfg = plot.get("avg_directions", {})
+    cell_cfg = plot.get("cell_directions", {})
     show_avg = avg_cfg.get("show", True)
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
@@ -113,13 +109,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     model_path = (job_dir / cfg["model"]).resolve()
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
-
-    if zone_cfg["type"] == "sphere":
-        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-    elif zone_cfg["type"] == "box":
-        sub = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
-    else:
-        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
+    sub = model.extract(zone)
 
     log.info(f"  {sub.n_cells} cells in zone")
 
