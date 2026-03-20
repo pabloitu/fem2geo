@@ -2,13 +2,12 @@ name: tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build-test:
+  test:
     if: github.repository == 'pabloitu/fem2geo'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -16,41 +15,27 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python-version: '3.10'
+            python-version: "3.10"
           - os: ubuntu-latest
-            python-version: '3.11'
-          - os: ubuntu-latest
-            python-version: '3.12'
+            python-version: "3.12"
           - os: macos-latest
-            python-version: '3.11'
-
-    defaults:
-      run:
-        shell: bash -l {0}
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
 
     steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          generate-run-shell: true
-          environment-file: environment.yml
-          create-args: >-
-            python=${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
-      - name: Install fem2geo
-        run: |
-          pip install -e .[dev]
-          python -c "from importlib.metadata import version; print(version('fem2geo'))"
+      - name: Install
+        run: pip install -e ".[test]"
 
-      - name: Free disk
-        run: |
-          micromamba clean --all --yes
-          rm -rf "$MAMBA_ROOT_PREFIX/pkgs" || true
-          df -h
-
-      - name: Test with pytest
-        run: |
-          pytest --durations=0
+      - name: Test
+        run: pytest --durations=0
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
@@ -58,41 +43,3 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
-
-  pip_smoke_linux:
-    if: github.repository == 'pabloitu/fem2geo'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.2.2
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Pip-only install (no tests)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-          python -c "from importlib.metadata import version; print(version('fem2geo'))"
-
-  pip_smoke_macos:
-    if: github.repository == 'pabloitu/fem2geo'
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4.2.2
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Pip-only install (no tests)
-        env:
-          DYLD_FALLBACK_LIBRARY_PATH: /opt/homebrew/lib:/usr/local/lib:${{ env.DYLD_FALLBACK_LIBRARY_PATH }}
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-          python -c "from importlib.metadata import version; print(version('fem2geo'))"
