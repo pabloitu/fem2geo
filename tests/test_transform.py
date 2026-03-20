@@ -8,6 +8,7 @@ from fem2geo.utils.transform import (
     plane_basis_enu,
     slip_rake2enu, slip_enu2rake,
     plane_sphe2enu, plane_sphe2ned, plane_pole2sphe,
+    grid_nodes, grid_centers,
 )
 
 
@@ -382,6 +383,35 @@ class TestPlanes(unittest.TestCase):
             self.assertAlmostEqual(d2, dip, places=8)
             ds = ((s2 - strike + 90) % 180) - 90  # strike mod 180
             self.assertAlmostEqual(ds, 0.0, places=8)
+
+
+class TestGrids(unittest.TestCase):
+
+    def test_node_shapes(self):
+        ms, md = grid_nodes(180, 45)
+        self.assertEqual(ms.shape, (46, 181))
+        self.assertEqual(md.shape, (46, 181))
+
+    def test_node_bounds(self):
+        ms, md = grid_nodes(36, 9)
+        self.assertAlmostEqual(ms.min(), 0.0)
+        self.assertAlmostEqual(ms.max(), 360.0)
+        self.assertAlmostEqual(md.min(), 0.0)
+        self.assertAlmostEqual(md.max(), 90.0)
+
+    def test_center_shapes(self):
+        ms, md = grid_nodes(36, 9)
+        cs, cd = grid_centers(ms, md)
+        self.assertEqual(cs.shape, (9, 36))
+        self.assertEqual(cd.shape, (9, 36))
+
+    def test_centers_inside_nodes(self):
+        ms, md = grid_nodes(36, 9)
+        cs, cd = grid_centers(ms, md)
+        self.assertGreater(cs.min(), 0.0)
+        self.assertLess(cs.max(), 360.0)
+        self.assertGreater(cd.min(), 0.0)
+        self.assertLess(cd.max(), 90.0)
 
 
 if __name__ == "__main__":
