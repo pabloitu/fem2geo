@@ -147,13 +147,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {path}")
     model = Model.from_file(path, schema)
 
-    if zone_cfg["type"] == "sphere":
-        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-    elif zone_cfg["type"] == "box":
-        sub = model.extract_box(
-            zone_cfg["center"], np.asarray(zone_cfg["dim"]))
-    else:
-        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
+    sub = model.extract(zone_cfg)
 
     log.info(f"  {sub.n_cells} cells in zone")
 

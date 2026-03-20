@@ -107,15 +107,15 @@ def run(cfg: dict, job_dir: Path) -> None:
     k_style = PlotConfig.avg(color=kostrov_cfg.get("color", "#E63946")).update(kostrov_cfg)
     m_style = PlotConfig.avg(color=model_cfg.get("color", "#2196F3")).update(model_cfg)
 
-    show_cell = cell_cfg.pop("show", False) if isinstance(cell_cfg, dict) else cell_cfg
-    cell_style = cell_cfg.pop("style", "scatter") if isinstance(cell_cfg, dict) else "scatter"
+    show_cell = cell_cfg.get("show", False) if isinstance(cell_cfg, dict) else cell_cfg
+    cell_style = cell_cfg.get("style", "scatter")
     cell_style_cfg = (PlotConfig.density() if cell_style == "contour"
                       else PlotConfig.cell(color="grey")).update(
         cell_cfg if isinstance(cell_cfg, dict) else {})
 
     data_cfg = plot_cfg.get("data_spread", {})
-    show_data = data_cfg.pop("show", False) if isinstance(data_cfg, dict) else data_cfg
-    data_style = data_cfg.pop("style", "scatter") if isinstance(data_cfg, dict) else "scatter"
+    show_data = data_cfg.get("show", False) if isinstance(data_cfg, dict) else data_cfg
+    data_style = data_cfg.get("style", "scatter") if isinstance(data_cfg, dict) else "scatter"
     data_style_cfg = (PlotConfig.density() if data_style == "contour"
                       else PlotConfig.cell(color="#E63946")).update(
         data_cfg if isinstance(data_cfg, dict) else {})
@@ -132,12 +132,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
 
-    if zone_cfg["type"] == "sphere":
-        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-    elif zone_cfg["type"] == "box":
-        sub = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
-    else:
-        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
+    sub = model.extract(zone_cfg)
 
     log.info(f"  {sub.n_cells} cells in zone")
 

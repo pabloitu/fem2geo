@@ -82,9 +82,9 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     avg_cfg = plot_cfg.get("avg_directions", {})
     cell_cfg = plot_cfg.get("cell_directions", {})
-    show_avg = avg_cfg.pop("show", True)
-    show_cell = cell_cfg.pop("show", False)
-    cell_style = cell_cfg.pop("style", "scatter")
+    show_avg = avg_cfg.get("show", True)
+    show_cell = cell_cfg.get("show", False)
+    cell_style = cell_cfg.get("style", "scatter")
 
     avg_style = PlotConfig.avg().update(avg_cfg)
     cell_style_cfg = (PlotConfig.density() if cell_style == "contour"
@@ -120,10 +120,7 @@ def run(cfg: dict, job_dir: Path) -> None:
 
         model = Model.from_file(path, schema)
 
-        if zone_cfg["type"] == "sphere":
-            model = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-        elif zone_cfg["type"] == "box":
-            model = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
+        model = model.extract(zone_cfg)
 
         log.info(f"  {model.n_cells} cells in zone")
 

@@ -340,6 +340,23 @@ class Model:
 
     # extraction
 
+    def extract(self, zone: dict) -> "Model":
+        """
+        Extract a sub-model from a zone config dict.
+
+        Parameters
+        ----------
+        zone : dict
+            Must contain ``type`` (``sphere`` or ``box``), ``center``,
+            and either ``radius`` (sphere) or ``dim`` (box).
+        """
+        kind = zone["type"]
+        if kind == "sphere":
+            return self.extract_sphere(zone["center"], zone["radius"])
+        if kind == "box":
+            return self.extract_box(zone["center"], zone["dim"])
+        raise ValueError(f"Unknown zone type '{kind}'.")
+
     def extract_sphere(self, center, radius) -> "Model":
         """Extract cells touched by a sphere."""
         center = np.asarray(center)

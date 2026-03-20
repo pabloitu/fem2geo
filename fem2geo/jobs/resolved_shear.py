@@ -26,7 +26,7 @@ Rake convention (Aki & Richards):
 
 Config reference
 ----------------
-job: wallace_bott
+job: resolved_shear
 schema: adeli                       # built-in schema name (default: adeli)
 units:                              # optional category-level unit overrides
   pressure: Pa
@@ -44,7 +44,7 @@ data:
     file: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
 plot:
-  title: "Wallace-Bott analysis"
+  title: "Resolved shear analysis"
   figsize: [8, 8]
   dpi: 200
   fault_planes:
@@ -79,7 +79,7 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import mplstereonet as mpl
+import mplstereonet
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch
@@ -130,11 +130,11 @@ def _slip_arrow(strike, dip, signed_rake, arrow_length=_ARROW_LENGTH):
     plunge, azm = line_rake2sphe(strike, dip, abs(signed_rake))
 
     # slip position in projected coords
-    sx, sy = mpl.line(plunge, azm)
+    sx, sy = mplstereonet.line(plunge, azm)
     sx, sy = sx.item(), sy.item()
 
     # pole position in projected coords
-    px, py = mpl.pole(strike, dip)
+    px, py = mplstereonet.pole(strike, dip)
     px, py = px.item(), py.item()
 
     # direction from slip position toward pole
@@ -163,7 +163,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     plot_cfg = cfg.get("plot", {})
     out_cfg = cfg.get("output", {})
 
-    title = plot_cfg.get("title", "Wallace-Bott analysis")
+    title = plot_cfg.get("title", "Resolved shear analysis")
     figsize = plot_cfg.get("figsize", [8, 8])
     dpi = plot_cfg.get("dpi", 200)
     out_dir = Path(out_cfg.get("dir", job_dir))
@@ -190,12 +190,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
 
-    if zone_cfg["type"] == "sphere":
-        sub = model.extract_sphere(zone_cfg["center"], zone_cfg["radius"])
-    elif zone_cfg["type"] == "box":
-        sub = model.extract_box(zone_cfg["center"], np.asarray(zone_cfg["dim"]))
-    else:
-        raise ValueError(f"Unknown zone type '{zone_cfg['type']}'.")
+    sub = model.extract(zone_cfg)
 
     log.info(f"  {sub.n_cells} cells in zone")
 
@@ -357,7 +352,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     ax.set_title(title, y=1.08)
 
     # save
-    out_path = out_dir / "wallace_bott.png"
+    out_path = out_dir / "resolved_shear.png"
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     log.info(f"Saved: {out_path}")

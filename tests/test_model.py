@@ -219,9 +219,25 @@ class TestExtraction(unittest.TestCase):
         self.assertIsInstance(
             self.m.extract_box([.5, .5, -1.5], [5, 5, 5]), Model)
 
+    def test_extract_sphere_from_dict(self):
+        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
+        self.assertIsInstance(self.m.extract(zone), Model)
+
+    def test_extract_box_from_dict(self):
+        zone = {"type": "box", "center": [.5, .5, -1.5], "dim": [5, 5, 5]}
+        self.assertIsInstance(self.m.extract(zone), Model)
+
+    def test_extract_bad_type_raises(self):
+        with self.assertRaises(ValueError):
+            self.m.extract({"type": "cylinder", "center": [0, 0, 0]})
+
     def test_preserves_schema(self):
         sub = self.m.extract_sphere([.5, .5, -1.5], 10)
         self.assertIs(sub.schema, self.m.schema)
+
+    def test_preserves_schema_via_dict(self):
+        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
+        self.assertIs(self.m.extract(zone).schema, self.m.schema)
 
     def test_large_radius_selects_all(self):
         self.m.extract_sphere([.5, .5, -1.5], 100)
