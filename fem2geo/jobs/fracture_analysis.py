@@ -80,7 +80,7 @@ log = logging.getLogger("fem2geoLogger")
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    # ── Config ────────────────────────────────────────────────────────────────
+    # config
     schema = ModelSchema.builtin(cfg.get("schema", "adeli"), units=cfg.get("units"))
     zone_cfg = cfg["zone"]
     plot_cfg = cfg.get("plot", {})
@@ -109,7 +109,7 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Load model and extract zone ───────────────────────────────────────────
+    # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
@@ -126,7 +126,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     if save_vtu:
         sub.save(out_dir / "extract.vtu")
 
-    # ── Load structural datasets ──────────────────────────────────────────────
+    # load structural datasets
     data_entries = cfg["data"]
     datasets = {}
     for name, entry in data_entries.items():
@@ -149,7 +149,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     if not datasets:
         log.warning("No plottable structural datasets after filtering. Nothing to compare.")
 
-    # ── Figure ────────────────────────────────────────────────────────────────
+    # figure
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
@@ -160,7 +160,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
     ]
 
-    # ── Cell directions (model spread) ────────────────────────────────────────
+    # cell directions (model spread)
     if show_cell:
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
@@ -171,7 +171,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         fn(ax, p2, a2, **cell_pc.as_kwargs(cell_style, "s"))
         fn(ax, p3, a3, **cell_pc.as_kwargs(cell_style, "v"))
 
-    # ── Average principal directions ──────────────────────────────────────────
+    # average principal directions
     if show_avg:
         _, vec = sub.avg_principal()
         p1, a1 = line_enu2sphe(vec[:, 0])
@@ -184,7 +184,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         stereo_line(ax, p3, a3, label=r"$\sigma_3$",
                     **avg_style.scatter_kwargs("v"))
 
-    # ── Fracture datasets (poles) ─────────────────────────────────────────────
+    # fracture datasets (poles)
     data_colors = MODEL_COLORS[:len(datasets)]
 
     for color, (name, fd) in zip(data_colors, datasets.items()):
@@ -194,14 +194,17 @@ def run(cfg: dict, job_dir: Path) -> None:
         )
         data_pc = PlotConfig.from_cfg(data_pc, {"markersize": 6, "alpha": 0.8})
 
-        stereo_pole(ax, fd.planes, label=f"{name} (poles)",
-                    color=color, marker="+",
-                    markersize=data_pc.markersize, alpha=data_pc.alpha)
+        stereo_pole(
+            ax, fd.strikes, fd.dips,
+            label=f"{name} (poles)",
+            color=color, marker="+",
+            markersize=data_pc.markersize, alpha=data_pc.alpha,
+        )
         legend_elements.append(
             Line2D([0], [0], color=color, linewidth=0, marker="+",
                    label=f"{name} (poles)"))
 
-    # ── Finalise ──────────────────────────────────────────────────────────────
+    # finalise
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(title, y=1.08)
 

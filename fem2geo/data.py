@@ -66,11 +66,6 @@ class FaultData:
         Strike/dip pairs in degrees (right-hand rule).
     rakes : numpy.ndarray, shape (N,)
         Signed rake angles in degrees (Aki & Richards convention).
-
-    Notes
-    -----
-    Strain tensor derivation from fault populations (e.g. Kostrov summation)
-    is not yet implemented.
     """
     planes: np.ndarray
     rakes: np.ndarray

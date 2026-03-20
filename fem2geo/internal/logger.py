@@ -19,7 +19,13 @@ LOGGING_CONFIG = {
             "stream": "ext://sys.stdout",
         }
     },
-    "loggers": {"fem2geoLogger": {"level": "DEBUG", "handlers": ["console"], "propagate": False}},
+    "loggers": {
+        "fem2geoLogger": {
+            "level": "DEBUG",
+            "handlers": ["console"],
+            "propagate": False,
+        }
+    },
     "root": {"level": "INFO", "handlers": ["console"]},
 }
 

@@ -34,7 +34,7 @@ data:
   faults:
     file: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
-compare: stress_dev                 # stress_dev | strain | strain_rate | strain_plastic | strain_elastic
+compare: strain                 #  strain | strain_rate | strain_plastic | strain_elastic
 
 plot:
   title: "Kostrov analysis"

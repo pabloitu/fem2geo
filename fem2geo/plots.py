@@ -1,6 +1,6 @@
 from dataclasses import dataclass, asdict
 
-import mplstereonet as mpl
+import mplstereonet
 import numpy as np
 
 MODEL_COLORS = [
@@ -120,7 +120,7 @@ def stereo_field(ax, mesh_strikes, mesh_dips, values,
     mappable
         The pcolormesh mappable.
     """
-    lon, lat = mpl.pole(mesh_strikes, mesh_dips)
+    lon, lat = mplstereonet.pole(mesh_strikes, mesh_dips)
 
     m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto",
                       vmin=vmin, vmax=vmax)
