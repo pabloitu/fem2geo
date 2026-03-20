@@ -3,8 +3,6 @@ from dataclasses import dataclass, asdict
 import mplstereonet as mpl
 import numpy as np
 
-from fem2geo.utils.tensor import grid_nodes, grid_centers, slip_tendency, dilation_tendency
-
 MODEL_COLORS = [
     "#E63946",  # red
     "#2196F3",  # blue
@@ -16,11 +14,6 @@ MODEL_COLORS = [
     "#607D8B",  # blue-grey
 ]
 
-_TENDENCY_FNS = {"slip": slip_tendency, "dilation": dilation_tendency}
-_CBAR_LABELS = {
-    "slip": r"Slip tendency $|\tau|/|\sigma_n|$",
-    "dilation": r"Dilation tendency $(\sigma_1-\sigma_n)/(\sigma_1-\sigma_3)$",
-}
 _MARKERS = {"s1": "o", "s2": "s", "s3": "v"}
 
 
@@ -89,26 +82,30 @@ class PlotConfig:
                 "alpha": self.alpha}
 
 
-def stereo_field(ax, sigma, kind="dilation", n_strikes=180, n_dips=45,
-                 cmap="jet", vmin=None, vmax=None, cbar_label=None, cbar_kwargs=None):
+def stereo_field(ax, mesh_strikes, mesh_dips, values,
+                 cmap="RdYlBu_r", vmin=None, vmax=None,
+                 cbar_label=None, cbar_kwargs=None):
     """
-    Compute and draw a scalar tendency field on an existing stereonet axes.
+    Draw a pre-computed scalar field on a stereonet as a pcolormesh.
+
+    The field is defined on cell centers of the strike/dip node grids.
+    The caller is responsible for computing the values (e.g. tendency,
+    susceptibility, or any other scalar metric).
 
     Parameters
     ----------
     ax : mplstereonet axes
-    sigma : array-like, shape (3, 3)
-        Stress tensor in ENU coordinates.
-    kind : str
-        ``slip`` or ``dilation``.
-    n_strikes, n_dips : int
-        Stereonet discretization (number of cells).
+    mesh_strikes, mesh_dips : numpy.ndarray
+        Node grids from :func:`~fem2geo.utils.transform.grid_nodes`,
+        shape (n_dips+1, n_strikes+1).
+    values : numpy.ndarray
+        Scalar values at cell centers, shape (n_dips, n_strikes).
     cmap : str
         Colormap name.
     vmin, vmax : float, optional
-        Color scaling.
+        Color scaling bounds.
     cbar_label : str, optional
-        Overrides the default colorbar label.
+        Colorbar label. If None, no label is drawn.
     cbar_kwargs : dict, optional
         Extra kwargs forwarded to ``fig.colorbar``.
 
@@ -117,18 +114,14 @@ def stereo_field(ax, sigma, kind="dilation", n_strikes=180, n_dips=45,
     mappable
         The pcolormesh mappable.
     """
-    if kind not in _TENDENCY_FNS:
-        raise ValueError(f"kind must be 'slip' or 'dilation', got '{kind}'.")
+    lon, lat = mpl.pole(mesh_strikes, mesh_dips)
 
-    mesh_s, mesh_d = grid_nodes(n_strikes, n_dips)
-    cs, cd = grid_centers(mesh_s, mesh_d)
-    planes = np.column_stack([cs.ravel(), cd.ravel()])
-    vals = _TENDENCY_FNS[kind](sigma, planes=planes).reshape(cs.shape)
-    lon, lat = mpl.pole(mesh_s, mesh_d)
+    m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto",
+                      vmin=vmin, vmax=vmax)
 
-    m = ax.pcolormesh(lon, lat, vals, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
-    label = cbar_label if cbar_label is not None else _CBAR_LABELS[kind]
-    ax.get_figure().colorbar(m, ax=ax, label=label, shrink=0.5, **(cbar_kwargs or {}))
+    defaults = {"shrink": 0.6, "pad": 0.08}
+    defaults.update(cbar_kwargs or {})
+    ax.get_figure().colorbar(m, ax=ax, label=cbar_label or "", **defaults)
     return m
 
 

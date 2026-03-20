@@ -539,3 +539,45 @@ def plane_pole2sphe(plunge, azimuth):
     if scalar:
         return float(strike), float(dip)
     return strike, dip
+
+
+# stereonet grids
+
+def grid_nodes(n_strikes, n_dips):
+    """
+    Create node grids for stereonet discretization.
+
+    Parameters
+    ----------
+    n_strikes : int
+        Number of strike bins. Nodes: n_strikes + 1 columns.
+    n_dips : int
+        Number of dip bins. Nodes: n_dips + 1 rows.
+
+    Returns
+    -------
+    mesh_strikes, mesh_dips : numpy.ndarray
+        Meshgrids of strike and dip nodes (degrees).
+    """
+    strikes = np.linspace(0.0, 360.0, n_strikes + 1, endpoint=True)
+    dips = np.linspace(0.0, 90.0, n_dips + 1, endpoint=True)
+    return np.meshgrid(strikes, dips)
+
+
+def grid_centers(mesh_strikes, mesh_dips):
+    """
+    Compute cell-center strike/dip arrays from node grids.
+
+    Parameters
+    ----------
+    mesh_strikes, mesh_dips : numpy.ndarray
+        Node grids as returned by :func:`grid_nodes`.
+
+    Returns
+    -------
+    strikes_c, dips_c : numpy.ndarray
+        Cell-center strike and dip arrays.
+    """
+    s = (mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2.0
+    d = (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2.0
+    return s, d

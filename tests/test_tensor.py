@@ -62,10 +62,44 @@ class TestTendencies(unittest.TestCase):
         scalar = [tm.slip_tendency(S, normals=N[i]) for i in range(25)]
         np.testing.assert_allclose(batch, scalar, atol=1e-9)
 
-    def test_zero_sigma_n_gives_inf(self):
-        S = np.diag([0, 2, 3.0])
-        self.assertTrue(
-            np.isinf(tm.slip_tendency(S, normals=[1, 0, 0], eps=1e-14)))
+    def test_slip_bounded_01(self):
+        S = np.diag([-3.0, -1.0, -0.5])
+        rng = np.random.default_rng(42)
+        N = rng.normal(size=(100, 3))
+        N /= np.linalg.norm(N, axis=1, keepdims=True)
+        ts = tm.slip_tendency(S, normals=N)
+        self.assertTrue(np.all(ts >= 0))
+        self.assertTrue(np.all(ts <= 1.0 + 1e-12))
+        # optimal plane should be near 1
+        self.assertGreater(np.max(ts), 0.9)
+
+    def test_slip_isotropic_zero(self):
+        S = 5.0 * np.eye(3)
+        ts = tm.slip_tendency(S, planes=[30, 45])
+        self.assertAlmostEqual(ts, 0.0, places=10)
+
+    def test_dilation_bounded_01(self):
+        S = np.diag([-3.0, -1.0, -0.5])
+        td = tm.dilation_tendency(S, planes=[30, 45])
+        self.assertGreaterEqual(td, 0.0)
+        self.assertLessEqual(td, 1.0 + 1e-12)
+
+    def test_combined_is_sum(self):
+        S = np.diag([-3.0, -1.0, -0.5])
+        P = np.array([[0, 30], [90, 60]], dtype=float)
+        ts = tm.slip_tendency(S, planes=P)
+        td = tm.dilation_tendency(S, planes=P)
+        tc = tm.combined_tendency(S, planes=P)
+        np.testing.assert_allclose(tc, ts + td, atol=1e-12)
+
+    def test_combined_bounded_02(self):
+        S = np.diag([-3.0, -1.0, -0.5])
+        rng = np.random.default_rng(7)
+        N = rng.normal(size=(100, 3))
+        N /= np.linalg.norm(N, axis=1, keepdims=True)
+        tc = tm.combined_tendency(S, normals=N)
+        self.assertTrue(np.all(tc >= 0))
+        self.assertTrue(np.all(tc <= 2.0 + 1e-12))
 
 
 class TestUnpackVoigt(unittest.TestCase):

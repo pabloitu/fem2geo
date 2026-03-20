@@ -13,9 +13,8 @@ __all__ = [
     "resolved_shear_enu",
     "slip_tendency",
     "dilation_tendency",
+    "combined_tendency",
     "kostrov_tensor",
-    "grid_nodes",
-    "grid_centers",
 ]
 
 # Voigt ordering: [xx, yy, zz, xy, yz, zx] -> (i, j) symmetric tensor
@@ -276,7 +275,15 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
 
 def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
     """
-    Compute slip tendency Ts = |tau| / |sigma_n| for one or many planes.
+    Normalized slip tendency Ts' for one or many planes.
+
+    Computes the ratio |tau| / |sigma_n| and normalizes by the maximum
+    slip tendency achievable in the given stress state, so the result is
+    always in [0, 1]. A value of 1 corresponds to the optimally oriented
+    plane for slip (Morris et al., 1996).
+
+    The maximum slip tendency is found analytically from the three 2D
+    Mohr circles defined by pairs of principal stresses.
 
     Parameters
     ----------
@@ -287,21 +294,24 @@ def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
     normals : array-like, shape (3,) or (N, 3), optional
         Plane normal(s) in ENU coordinates.
     eps : float
-        Threshold for treating sigma_n as zero.
+        Threshold for treating sigma_n or Ts_max as zero.
 
     Returns
     -------
     numpy.ndarray or float
-        Slip tendency values. Scalar if input is one plane/normal, array otherwise.
+        Normalized slip tendency in [0, 1]. Scalar if input is one
+        plane/normal, array otherwise.
 
     Raises
     ------
     ValueError
-        If sigma has invalid shape or both/neither planes and normals are provided.
+        If sigma has invalid shape or both/neither planes and normals
+        are provided.
 
-    Notes
-    -----
-    For pathological cases where ``|sigma_n| < eps``, this function returns ``np.inf``.
+    References
+    ----------
+    Morris, A., Ferrill, D. A., & Henderson, D. B. (1996). Slip-tendency
+    analysis and fault reactivation. *Geology*, 24(3), 275-278.
     """
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):
@@ -325,11 +335,38 @@ def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
     tau = np.linalg.norm(t_s, axis=1)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        out = tau / np.abs(sigma_n)
+        raw = tau / np.abs(sigma_n)
+    raw[np.abs(sigma_n) < eps] = 0.0
 
-    out[np.abs(sigma_n) < eps] = np.inf
+    # Ts_max from the three 2D Mohr circles
+    ts_max = _ts_max(S, eps)
+    if ts_max < eps:
+        out = np.zeros_like(raw)
+    else:
+        out = raw / ts_max
 
+    np.clip(out, 0.0, 1.0, out=out)
     return float(out[0]) if scalar else out
+
+
+def _ts_max(sigma, eps=1e-12):
+    """
+    Maximum slip tendency for a stress state.
+
+    For each pair of principal stresses (si, sj), the maximum
+    tau / |sigma_n| on the corresponding Mohr circle is
+    |si - sj| / |si + sj| (when si + sj != 0). Returns the
+    largest value across all three pairs.
+    """
+    eigs = np.linalg.eigvalsh(sigma)
+    ts = 0.0
+    for i in range(3):
+        for j in range(i + 1, 3):
+            si, sj = eigs[i], eigs[j]
+            denom = abs(si + sj)
+            if denom > eps:
+                ts = max(ts, abs(si - sj) / denom)
+    return ts
 
 
 def dilation_tendency(sigma, planes=None, normals=None, eps=1e-12):
@@ -394,6 +431,46 @@ def dilation_tendency(sigma, planes=None, normals=None, eps=1e-12):
     return float(out[0]) if scalar else out
 
 
+def combined_tendency(sigma, planes=None, normals=None, eps=1e-12):
+    """
+    Combined reactivation tendency: Ts' + Td.
+
+    Sums the normalized slip tendency (Morris et al., 1996) and the
+    dilation tendency (Ferrill et al., 1999). Both components are in
+    [0, 1], so the result ranges from 0 (stable) to 2 (maximum
+    reactivation potential for both slip and dilation).
+
+    Parameters
+    ----------
+    sigma : array-like, shape (3, 3)
+        Stress tensor in ENU coordinates.
+    planes : array-like, shape (2,) or (N, 2), optional
+        Plane(s) [strike, dip] in degrees.
+    normals : array-like, shape (3,) or (N, 3), optional
+        Plane normal(s) in ENU coordinates.
+    eps : float
+        Threshold for near-zero denominators.
+
+    Returns
+    -------
+    numpy.ndarray or float
+        Combined tendency values in [0, 2].
+
+    References
+    ----------
+    Ferrill, D. A., Smart, K. J., & Morris, A. P. (2020). Fault failure
+    modes, deformation mechanisms, dilation tendency, slip tendency, and
+    conduits v. seals. *Geol. Soc. Lond. Spec. Publ.*, 496, 75-98.
+    """
+    ts = slip_tendency(sigma, planes=planes, normals=normals, eps=eps)
+    td = dilation_tendency(sigma, planes=planes, normals=normals, eps=eps)
+    ts = np.asarray(ts, dtype=float)
+    td = np.asarray(td, dtype=float)
+    out = ts + td
+    scalar = out.ndim == 0
+    return float(out) if scalar else out
+
+
 def kostrov_tensor(strikes, dips, rakes):
     """
     Compute the Kostrov (1974) summed moment tensor from a fault population.
@@ -440,43 +517,3 @@ def kostrov_tensor(strikes, dips, rakes):
     K *= 0.5
 
     return K
-
-
-def grid_nodes(n_strikes, n_dips):
-    """
-    Create node grids for strike and dip.
-
-    Parameters
-    ----------
-    n_strikes : int
-        Number of strike bins (cells). Nodes will have n_strikes + 1 columns.
-    n_dips : int
-        Number of dip bins (cells). Nodes will have n_dips + 1 rows.
-
-    Returns
-    -------
-    mesh_strikes, mesh_dips : numpy.ndarray
-        Meshgrids of strike and dip nodes (degrees).
-    """
-    strikes = np.linspace(0.0, 360.0, n_strikes + 1, endpoint=True)
-    dips = np.linspace(0.0, 90.0, n_dips + 1, endpoint=True)
-    return np.meshgrid(strikes, dips)
-
-
-def grid_centers(mesh_strikes, mesh_dips):
-    """
-    Compute cell-center strike/dip arrays from node grids.
-
-    Parameters
-    ----------
-    mesh_strikes, mesh_dips : numpy.ndarray
-        Node grids as returned by :func:`grid_nodes`.
-
-    Returns
-    -------
-    strikes_c, dips_c : numpy.ndarray
-        Cell-center strike and dip arrays.
-    """
-    s = (mesh_strikes[:-1, :-1] + mesh_strikes[:-1, 1:]) / 2.0
-    d = (mesh_dips[:-1, :-1] + mesh_dips[1:, :-1]) / 2.0
-    return s, d
