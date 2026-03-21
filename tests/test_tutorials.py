@@ -32,8 +32,7 @@ def _discover_configs():
         if not d.is_dir() or not _DIR_PATTERN.match(d.name):
             continue
 
-        yamls = sorted(d.glob("**/*.yaml"))
-        for cfg_path in yamls:
+        for cfg_path in sorted(d.glob("**/*.yaml")):
             rel = cfg_path.relative_to(_TUTORIALS_DIR).with_suffix("")
             yield str(rel), cfg_path
 
@@ -52,4 +51,4 @@ _CONFIGS = list(_discover_configs())
 @pytest.mark.parametrize("name,config_path", _CONFIGS, ids=[c[0] for c in _CONFIGS])
 def test_tutorial(name, config_path, tmp_path):
     """Run a single tutorial config and verify it completes without error."""
-    run(config_path)
+    run(config_path, output_dir=tmp_path)
