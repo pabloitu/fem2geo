@@ -77,7 +77,7 @@ The `job` key in the config selects the analysis. Currently supported jobs:
 | Job | Description |
 |-----|-------------|
 | `principal_directions` | Stereonet of average (and optional cell-level) principal stress directions for one or multiple models |
-| `tendency_plot` | Slip and/or dilation tendency contour with average principal directions overlaid |
+| `tendency` | Slip and/or dilation tendency contour with average principal directions overlaid |
 
 ---
 
@@ -88,7 +88,7 @@ The `job` key in the config selects the analysis. Currently supported jobs:
 | 1 | `1_probing_model` | `principal_directions` | Probe average stress state at a location in a single model |
 | 2 | `2_model_comparison` | `principal_directions` | Compare principal stress directions across multiple models |
 | 3 | `3_structural_data` | `compare_structural`   | Overlay field structural measurements on model predictions |
-| 4 | `4_tendency_plot` | `tendency_plot`        | Slip and dilation tendency with average directions |
+| 4 | `4_tendency` | `tendency`        | Slip and dilation tendency with average directions |
 
 ---
 

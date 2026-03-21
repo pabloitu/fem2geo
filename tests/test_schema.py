@@ -54,7 +54,7 @@ class TestScalarFields(unittest.TestCase):
         self.s = ModelSchema.from_dict(_ADELI)
 
     def test_lookup_and_units(self):
-        self.assertTrue(self.s.has("u"))
+        self.assertIn("u", self.s.fields)
         self.assertEqual(self.s.fields["u"].unit, "m")
         self.assertAlmostEqual(self.s.fields["u"].si_factor, 1.0)
 
@@ -64,7 +64,7 @@ class TestScalarFields(unittest.TestCase):
         self.assertIsNone(e.unit)
 
     def test_has_missing(self):
-        self.assertFalse(self.s.has("nope"))
+        self.assertNotIn("nope", self.s.fields)
 
 
 class TestTensors(unittest.TestCase):
@@ -84,9 +84,9 @@ class TestTensors(unittest.TestCase):
 
     def test_multiple(self):
         s = ModelSchema.from_dict(_PACKED)
-        self.assertTrue(s.has_tensor("stress"))
-        self.assertTrue(s.has_tensor("strain"))
-        self.assertFalse(s.has_tensor("bogus"))
+        self.assertIn("stress", s.tensors)
+        self.assertIn("strain", s.tensors)
+        self.assertNotIn("bogus", s.tensors)
 
     def test_no_unit_gives_none(self):
         s = ModelSchema.from_dict(_PACKED)
@@ -160,9 +160,9 @@ class TestAdeliBuiltin(unittest.TestCase):
 
     def test_loads_with_tensor_and_fields(self):
         self.assertEqual(self.s.name, "adeli")
-        self.assertTrue(self.s.has_tensor("stress"))
+        self.assertIn("stress", self.s.tensors)
         for f in ("dir_s1", "dir_s3", "val_s1", "val_s3", "u"):
-            self.assertTrue(self.s.has(f), msg=f)
+            self.assertIn(f, self.s.fields, msg=f)
 
 
 if __name__ == "__main__":

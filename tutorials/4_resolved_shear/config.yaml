@@ -9,5 +9,4 @@ zone:
   radius: 0.5
 
 data:
-  faults:
-    file: ../data/faults.csv
+  faults: ../data/faults.csv

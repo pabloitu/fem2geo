@@ -6,6 +6,8 @@ from fem2geo.utils import transform as tr
 __all__ = [
     "unpack_voigt6",
     "unpack_components",
+    "eigenvalues",
+    "eigenvectors",
     "rot_matrix",
     "rot_tensor",
     "normals_from_planes",
@@ -72,6 +74,39 @@ def unpack_components(arrays):
         t[:, i, j] = arr
         t[:, j, i] = arr
     return t
+
+
+def eigenvalues(tensors):
+    """
+    Eigenvalues of an array of symmetric 3x3 tensors, sorted ascending.
+
+    Parameters
+    ----------
+    tensors : array-like, shape (N, 3, 3)
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3)
+        Eigenvalues per cell, column 0 smallest (most compressive).
+    """
+    return np.linalg.eigvalsh(np.asarray(tensors, dtype=float))
+
+
+def eigenvectors(tensors):
+    """
+    Eigenvectors of an array of symmetric 3x3 tensors.
+
+    Parameters
+    ----------
+    tensors : array-like, shape (N, 3, 3)
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3, 3)
+        Eigenvectors as columns, sorted by ascending eigenvalue.
+    """
+    _, vecs = np.linalg.eigh(np.asarray(tensors, dtype=float))
+    return vecs
 
 
 def rot_matrix(angle, axis):

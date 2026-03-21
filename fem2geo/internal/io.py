@@ -11,8 +11,6 @@ from fem2geo.internal.schema import ModelSchema
 log = logging.getLogger("fem2geoLogger")
 
 
-# structural data
-
 _PLANES_COLS = {"strike", "dip"}
 _FAULTS_COLS = {"strike", "dip", "rake"}
 
@@ -30,9 +28,8 @@ def load_structural_csv(path) -> FractureData | FaultData:
 
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
-        raw_fields = [name.strip().lower() for name in reader.fieldnames]
+        cols = {name.strip().lower() for name in reader.fieldnames}
 
-        cols = set(raw_fields)
         if _FAULTS_COLS <= cols:
             kind = "faults"
         elif _PLANES_COLS <= cols:
@@ -40,7 +37,8 @@ def load_structural_csv(path) -> FractureData | FaultData:
         else:
             raise ValueError(
                 f"Unrecognised CSV columns: {reader.fieldnames}. "
-                f"Expected: {sorted(_FAULTS_COLS)} or {sorted(_PLANES_COLS)}.")
+                f"Expected: {sorted(_FAULTS_COLS)} or {sorted(_PLANES_COLS)}."
+            )
 
         col_map = {name.strip().lower(): name.strip()
                    for name in reader.fieldnames}
@@ -50,8 +48,8 @@ def load_structural_csv(path) -> FractureData | FaultData:
         raise ValueError(f"Structural data file is empty: {path}")
 
     strikes = np.array([float(r[col_map["strike"]]) for r in rows])
-    dips = np.array([float(r[col_map["dip"]]) for r in rows])
-    planes = np.column_stack([strikes, dips])
+    dips    = np.array([float(r[col_map["dip"]])    for r in rows])
+    planes  = np.column_stack([strikes, dips])
 
     if kind == "faults":
         rakes = np.array([float(r[col_map["rake"]]) for r in rows])
@@ -59,12 +57,11 @@ def load_structural_csv(path) -> FractureData | FaultData:
     else:
         data = FractureData(planes=planes)
 
-    log.info(f"Loaded structural data: {path} "
-             f"({kind}, {len(rows)} measurements)")
+    log.info(
+        f"Loaded structural data: {path} ({kind}, {len(rows)} measurements)"
+    )
     return data
 
-
-# grid loading
 
 def load_grid(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
     """
@@ -82,53 +79,43 @@ def load_grid(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
     grid = pv.read(path)
     loaded, skipped = [], []
 
-    # scalar/vector fields
     for canonical, entry in schema.fields.items():
-        ok = _rename_array(grid, entry.solver_key, canonical)
-        if ok:
+        if _rename(grid, entry.solver_key, canonical):
             if canonical.startswith("dir_"):
-                _normalize_dir(grid, canonical)
+                _normalize(grid, canonical)
             loaded.append(canonical)
         else:
             skipped.append(entry.solver_key)
 
-    # tensor arrays
     for name, entry in schema.tensors.items():
         if entry.is_packed:
-            ok = _rename_array(grid, entry.voigt6, name)
-            (loaded if ok else skipped).append(
-                name if ok else entry.voigt6)
+            ok = _rename(grid, entry.voigt6, name)
+            (loaded if ok else skipped).append(name if ok else entry.voigt6)
         else:
             for comp, solver_key in entry.components.items():
                 tag = f"_tensor_{name}_{comp}"
-                ok = _rename_array(grid, solver_key, tag)
-                (loaded if ok else skipped).append(
-                    tag if ok else solver_key)
+                ok = _rename(grid, solver_key, tag)
+                (loaded if ok else skipped).append(tag if ok else solver_key)
 
-    log.info(f"Loaded {path}")
-    log.info(f"  fields: {', '.join(sorted(loaded))}")
+    log.info(f"  Fields: {', '.join(sorted(loaded))}")
     if skipped:
-        log.warning(f"  not found in file: {', '.join(sorted(skipped))}")
+        log.warning(f"  Not found: {', '.join(sorted(skipped))}")
 
     return grid
 
 
-def _rename_array(grid, solver_key, canonical) -> bool:
+def _rename(grid, solver_key, canonical) -> bool:
     """Rename an array in cell or point data. Returns True if found."""
-    if solver_key in grid.cell_data:
-        if solver_key != canonical:
-            grid.cell_data[canonical] = grid.cell_data[solver_key]
-            del grid.cell_data[solver_key]
-        return True
-    if solver_key in grid.point_data:
-        if solver_key != canonical:
-            grid.point_data[canonical] = grid.point_data[solver_key]
-            del grid.point_data[solver_key]
-        return True
+    for store in (grid.cell_data, grid.point_data):
+        if solver_key in store:
+            if solver_key != canonical:
+                store[canonical] = store[solver_key]
+                del store[solver_key]
+            return True
     return False
 
 
-def _normalize_dir(grid, canonical):
+def _normalize(grid, canonical):
     """Normalize a directional array to unit vectors in place."""
     for store in (grid.cell_data, grid.point_data):
         if canonical in store:

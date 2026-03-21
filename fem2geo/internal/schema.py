@@ -14,7 +14,7 @@ SI_FACTORS: dict[str, float] = {
 }
 
 
-def _resolve_unit(category, active_units):
+def resolve_unit(category, active_units):
     """Return (unit_str, si_factor) for a category, or (None, None)."""
     if not category:
         return None, None
@@ -23,8 +23,6 @@ def _resolve_unit(category, active_units):
         return None, None
     return unit, SI_FACTORS.get(unit.lower())
 
-
-# entries
 
 @dataclass
 class ScalarEntry:
@@ -60,8 +58,6 @@ class TensorEntry:
         return self.voigt6 is not None
 
 
-# schema
-
 @dataclass
 class ModelSchema:
     """
@@ -74,25 +70,23 @@ class ModelSchema:
     fields:  dict[str, ScalarEntry]
     tensors: dict[str, TensorEntry] = field(default_factory=dict)
 
-    # constructors
-
     @classmethod
-    def _from_raw(cls, raw: dict,
-                  unit_overrides: Optional[dict] = None) -> "ModelSchema":
-        active_units = {**raw.get("units", {}), **(unit_overrides or {})}
+    def from_dict(cls, d: dict, units: Optional[dict] = None) -> "ModelSchema":
+        active_units = {**d.get("units", {}), **(units or {})}
 
         fields = {}
-        for canonical, spec in raw.get("fields", {}).items():
+        for canonical, spec in d.get("fields", {}).items():
             solver_key = spec["field"] if isinstance(spec, dict) else spec
             category = spec.get("category") if isinstance(spec, dict) else None
-            unit, si = _resolve_unit(category, active_units)
-            fields[canonical] = ScalarEntry(canonical, solver_key, category,
-                                            unit, si)
+            unit, si = resolve_unit(category, active_units)
+            fields[canonical] = ScalarEntry(
+                canonical, solver_key, category, unit, si
+            )
 
         tensors = {}
-        for canonical, spec in raw.get("tensors", {}).items():
+        for canonical, spec in d.get("tensors", {}).items():
             category = spec.get("category")
-            unit, si = _resolve_unit(category, active_units)
+            unit, si = resolve_unit(category, active_units)
             tensors[canonical] = TensorEntry(
                 canonical=canonical,
                 voigt6=spec.get("voigt6"),
@@ -100,37 +94,25 @@ class ModelSchema:
                 category=category, unit=unit, si_factor=si,
             )
 
-        return cls(name=raw.get("solver", "custom"), fields=fields,
+        return cls(name=d.get("solver", "custom"), fields=fields,
                    tensors=tensors)
 
     @classmethod
-    def from_dict(cls, d: dict,
-                  units: Optional[dict] = None) -> "ModelSchema":
-        return cls._from_raw(d, unit_overrides=units)
-
-    @classmethod
-    def from_yaml(cls, path,
-                  units: Optional[dict] = None) -> "ModelSchema":
+    def from_yaml(cls, path, units: Optional[dict] = None) -> "ModelSchema":
         with open(path) as f:
             raw = yaml.safe_load(f)
-        return cls._from_raw(raw, unit_overrides=units)
+        return cls.from_dict(raw, units=units)
 
     @classmethod
-    def builtin(cls, name: str,
-                units: Optional[dict] = None) -> "ModelSchema":
+    def builtin(cls, name: str, units: Optional[dict] = None) -> "ModelSchema":
         """Load a built-in schema by name (e.g. ``"adeli"``)."""
         p = Path(__file__).parent / "schemas" / f"{name}.yaml"
         if not p.exists():
-            available = [f.stem for f in
-                         (Path(__file__).parent / "schemas").glob("*.yaml")]
+            available = [
+                f.stem for f in
+                (Path(__file__).parent / "schemas").glob("*.yaml")
+            ]
             raise ValueError(
-                f"No built-in schema '{name}'. Available: {available}")
+                f"No built-in schema '{name}'. Available: {available}"
+            )
         return cls.from_yaml(p, units=units)
-
-    # queries
-
-    def has(self, canonical: str) -> bool:
-        return canonical in self.fields
-
-    def has_tensor(self, canonical: str) -> bool:
-        return canonical in self.tensors

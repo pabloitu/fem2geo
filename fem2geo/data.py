@@ -37,14 +37,6 @@ class FractureData:
     def __repr__(self):
         return f"FractureData({len(self)} measurements)"
 
-    @property
-    def strikes(self) -> np.ndarray:
-        return self.planes[:, 0]
-
-    @property
-    def dips(self) -> np.ndarray:
-        return self.planes[:, 1]
-
 
 @dataclass
 class FaultData:
@@ -66,11 +58,6 @@ class FaultData:
         Strike/dip pairs in degrees (right-hand rule).
     rakes : numpy.ndarray, shape (N,)
         Signed rake angles in degrees (Aki & Richards convention).
-
-    Notes
-    -----
-    Strain tensor derivation from fault populations (e.g. Kostrov summation)
-    is not yet implemented.
     """
     planes: np.ndarray
     rakes: np.ndarray
@@ -81,20 +68,16 @@ class FaultData:
         if self.planes.shape[1] != 2:
             raise ValueError("planes must have shape (N, 2): [strike, dip].")
         if self.planes.shape[0] != self.rakes.shape[0]:
-            raise ValueError("planes and rakes must have the same number of rows.")
+            raise ValueError(
+                "planes and rakes must have the same number of rows."
+            )
         if np.any(np.abs(self.rakes) > 180.0):
-            raise ValueError("Rakes must be in (-180, 180] (Aki & Richards convention).")
+            raise ValueError(
+                "Rakes must be in (-180, 180] (Aki & Richards convention)."
+            )
 
     def __len__(self):
         return self.planes.shape[0]
 
     def __repr__(self):
         return f"FaultData({len(self)} measurements)"
-
-    @property
-    def strikes(self) -> np.ndarray:
-        return self.planes[:, 0]
-
-    @property
-    def dips(self) -> np.ndarray:
-        return self.planes[:, 1]

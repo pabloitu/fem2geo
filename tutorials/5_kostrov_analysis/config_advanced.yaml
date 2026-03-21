@@ -1,4 +1,4 @@
-job: kostrov_analysis
+job: kostrov
 schema: adeli2
 units:
   pressure: MPa
@@ -11,13 +11,12 @@ zone:
   radius: 500
 
 data:
-  faults:
-    file: ../data/faults_b.csv                # columns: strike, dip, rake (signed, Aki & Richards)
+  faults: ../data/faults_b.csv     # columns: strike, dip, rake (signed, Aki & Richards)
 
-compare: strain_elastic
+compare: strain_plastic
 
 plot:
-  title: "Kostrov analysis — with spread"
+  title: Kostrov Analysis - Cell Spread
   figsize: [8, 8]
   dpi: 200
   kostrov:
@@ -41,4 +40,4 @@ plot:
 
 output:
   dir: results_plastic/
-  save_vtu: false
+  vtu: extract.vtu

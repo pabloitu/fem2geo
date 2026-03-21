@@ -1,7 +1,10 @@
 from dataclasses import dataclass, asdict
 
-import mplstereonet as mpl
+import mplstereonet
 import numpy as np
+
+from fem2geo.utils.transform import line_rake2sphe
+
 
 MODEL_COLORS = [
     "#E63946",  # red
@@ -14,90 +17,53 @@ MODEL_COLORS = [
     "#607D8B",  # blue-grey
 ]
 
-_MARKERS = {"s1": "o", "s2": "s", "s3": "v"}
-
 
 @dataclass
 class PlotConfig:
     """
-    Style for a plotted direction set (σ1, σ2, or σ3).
+    Bag of matplotlib style parameters. Fields left as None are omitted
+    when passed to matplotlib, so the library defaults apply.
 
-    All fields map directly to matplotlib kwargs. Marker shape is set
-    per-axis by the job and should not be overridden in the config.
-
-    Parameters
-    ----------
-    color : str
-    markersize : float
-    markeredgecolor : str
-    alpha : float
-    linewidth : float
-        Contour line width (contour style only).
-    levels : int
-        Number of density contour lines (contour style only).
-    sigma : float
-        Maximum sigma level for density contours (contour style only).
+    Use :meth:`update` to override fields from a config dict or kwargs,
+    and :meth:`kwargs` to get a clean dict for matplotlib calls.
     """
-    color: str = "k"
-    markersize: float = 8
-    markeredgecolor: str = "k"
-    alpha: float = 1.0
-    linewidth: float = 1.0
-    levels: int = 4
-    sigma: float = 2.0
+    color:           str   = None
+    marker:          str   = None
+    markersize:      float = None
+    markeredgecolor: str   = None
+    alpha:           float = None
+    linewidth:       float = None
+    levels:          int   = None
+    sigma:           float = None
 
-    @classmethod
-    def avg(cls, color: str = "k") -> "PlotConfig":
-        return cls(color=color, markersize=8, markeredgecolor="k", alpha=1.0)
+    def update(self, overrides=None, **kw):
+        """Return a new PlotConfig with overrides applied."""
+        if isinstance(overrides, dict):
+            kw = {**overrides, **kw}
+        valid = {
+            k: v for k, v in kw.items()
+            if k in self.__dataclass_fields__ and v is not None
+        }
+        return PlotConfig(**{**asdict(self), **valid})
 
-    @classmethod
-    def cell(cls, color: str = "k") -> "PlotConfig":
-        return cls(color=color, markersize=3, markeredgecolor="none", alpha=0.4)
-
-    @classmethod
-    def density(cls, color: str = "k") -> "PlotConfig":
-        return cls(color=color, levels=4, sigma=2.0, linewidth=1.0)
-
-    @classmethod
-    def from_cfg(cls, base: "PlotConfig", cfg: dict) -> "PlotConfig":
-        """Override fields from a config dict, ignoring non-PlotConfig keys."""
-        _skip = {"show", "style"}
-        overrides = {k: v for k, v in cfg.items()
-                     if k not in _skip and k in cls.__dataclass_fields__}
-        return cls(**{**asdict(base), **overrides})
-
-    def update(self, cfg: dict) -> "PlotConfig":
-        """Return a new PlotConfig with fields from cfg applied, skipping show/style."""
-        return PlotConfig.from_cfg(self, cfg)
-
-    def scatter_kwargs(self, marker: str) -> dict:
-        return {"color": self.color, "marker": marker,
-                "markersize": self.markersize,
-                "markeredgecolor": self.markeredgecolor,
-                "alpha": self.alpha}
-
-    def contour_kwargs(self) -> dict:
-        return {"color": self.color, "levels": self.levels,
-                "sigma": self.sigma, "linewidth": self.linewidth,
-                "alpha": self.alpha}
+    def kwargs(self):
+        """Return non-None fields as a dict for matplotlib."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-def stereo_field(ax, mesh_strikes, mesh_dips, values,
-                 cmap="RdYlBu_r", vmin=None, vmax=None,
-                 cbar_label=None, cbar_kwargs=None):
+def stereo_field(
+    ax, mesh_strikes, mesh_dips, values,
+    cmap="RdYlBu_r", vmin=None, vmax=None,
+    cbar_label=None, cbar_kwargs=None,
+):
     """
     Draw a pre-computed scalar field on a stereonet as a pcolormesh.
-
-    The field is defined on cell centers of the strike/dip node grids.
-    The caller is responsible for computing the values (e.g. tendency,
-    susceptibility, or any other scalar metric).
 
     Parameters
     ----------
     ax : mplstereonet axes
     mesh_strikes, mesh_dips : numpy.ndarray
-        Node grids from :func:`~fem2geo.utils.transform.grid_nodes`,
-        shape (n_dips+1, n_strikes+1).
+        Node grids from :func:`~fem2geo.utils.transform.grid_nodes`.
     values : numpy.ndarray
         Scalar values at cell centers, shape (n_dips, n_strikes).
     cmap : str
@@ -105,7 +71,7 @@ def stereo_field(ax, mesh_strikes, mesh_dips, values,
     vmin, vmax : float, optional
         Color scaling bounds.
     cbar_label : str, optional
-        Colorbar label. If None, no label is drawn.
+        Colorbar label.
     cbar_kwargs : dict, optional
         Extra kwargs forwarded to ``fig.colorbar``.
 
@@ -114,188 +80,130 @@ def stereo_field(ax, mesh_strikes, mesh_dips, values,
     mappable
         The pcolormesh mappable.
     """
-    lon, lat = mpl.pole(mesh_strikes, mesh_dips)
-
-    m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto",
-                      vmin=vmin, vmax=vmax)
-
+    lon, lat = mplstereonet.pole(mesh_strikes, mesh_dips)
+    m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
     defaults = {"shrink": 0.6, "pad": 0.08}
     defaults.update(cbar_kwargs or {})
     ax.get_figure().colorbar(m, ax=ax, label=cbar_label or "", **defaults)
     return m
 
 
+def _unpack_args(first, second, kind):
+    first = np.asarray(first, dtype=float)
+    if second is None:
+        if first.ndim == 0:
+            raise ValueError(f"{kind[1]} required for scalar {kind[0]}.")
+        packed = np.atleast_2d(first)
+        return packed[:, 0], packed[:, 1]
+    return np.atleast_1d(first), np.atleast_1d(np.asarray(second, dtype=float))
+
+
 def stereo_line(ax, plunge, azimuth=None, label=None, **kwargs):
     """
-    Plot one or many line elements on a stereonet axes.
-
-    Accepts either separate arrays or a packed (N, 2) array for
-    backward compatibility.
-
-    Parameters
-    ----------
-    ax : mplstereonet axes
-    plunge : float, array-like shape (N,), or array-like shape (N, 2)
-        Plunge in degrees. If shape (N, 2) and ``azimuth`` is None,
-        interpreted as packed [plunge, azimuth] pairs.
-    azimuth : float or array-like shape (N,), optional
-        Azimuth in degrees. Required unless ``plunge`` is packed.
-    label : str, optional
-    **kwargs
-        Forwarded to ``ax.line``.
+    Plot line elements on a stereonet. Accepts separate arrays or
+    a packed (N, 2) array for backward compatibility.
     """
-    plunge = np.asarray(plunge, dtype=float)
-    if azimuth is None:
-        if plunge.ndim == 0:
-            raise ValueError("azimuth is required for scalar plunge.")
-        packed = np.atleast_2d(plunge)
-        plunge, azimuth = packed[:, 0], packed[:, 1]
-    else:
-        azimuth = np.asarray(azimuth, dtype=float)
-        plunge = np.atleast_1d(plunge)
-        azimuth = np.atleast_1d(azimuth)
-
+    plunge, azimuth = _unpack_args(plunge, azimuth, ("plunge", "azimuth"))
     ax.line(plunge, azimuth, label=label, **kwargs)
 
 
 def stereo_pole(ax, strike, dip=None, label=None, **kwargs):
     """
-    Plot poles to planes on a stereonet axes.
-
-    Accepts either separate arrays or a packed (N, 2) array for
-    backward compatibility.
-
-    Parameters
-    ----------
-    ax : mplstereonet axes
-    strike : float, array-like shape (N,), or array-like shape (N, 2)
-        Strike in degrees. If shape (N, 2) and ``dip`` is None,
-        interpreted as packed [strike, dip] pairs.
-    dip : float or array-like shape (N,), optional
-        Dip in degrees. Required unless ``strike`` is packed.
-    label : str, optional
-        Label assigned to the plotted set (legend-safe).
-    **kwargs
-        Forwarded to ``ax.pole``.
+    Plot poles to planes on a stereonet. Accepts separate arrays
+    or a packed (N, 2) array.
     """
-    strike = np.asarray(strike, dtype=float)
-    if dip is None:
-        if strike.ndim == 0:
-            raise ValueError("dip is required for scalar strike.")
-        packed = np.atleast_2d(strike)
-        strike, dip = packed[:, 0], packed[:, 1]
-    else:
-        dip = np.asarray(dip, dtype=float)
-        strike = np.atleast_1d(strike)
-        dip = np.atleast_1d(dip)
-
+    strike, dip = _unpack_args(strike, dip, ("strike", "dip"))
     ax.pole(strike, dip, label=label, **kwargs)
 
 
 def stereo_plane(ax, strike, dip=None, label=None, **kwargs):
     """
-    Plot great circles (fault/fracture planes) on a stereonet axes.
-
-    Accepts either separate arrays or a packed (N, 2) array for
-    backward compatibility.
-
-    Parameters
-    ----------
-    ax : mplstereonet axes
-    strike : float, array-like shape (N,), or array-like shape (N, 2)
-        Strike in degrees. If shape (N, 2) and ``dip`` is None,
-        interpreted as packed [strike, dip] pairs.
-    dip : float or array-like shape (N,), optional
-        Dip in degrees. Required unless ``strike`` is packed.
-    label : str, optional
-        Label assigned to the first plane only (legend-safe).
-    **kwargs
-        Forwarded to ``ax.plane``.
+    Plot great circles on a stereonet. Accepts separate arrays or
+    a packed (N, 2) array.
     """
-    strike = np.asarray(strike, dtype=float)
-    if dip is None:
-        if strike.ndim == 0:
-            raise ValueError("dip is required for scalar strike.")
-        packed = np.atleast_2d(strike)
-        strike, dip = packed[:, 0], packed[:, 1]
-    else:
-        dip = np.asarray(dip, dtype=float)
-        strike = np.atleast_1d(strike)
-        dip = np.atleast_1d(dip)
-
-    # great circles must be drawn individually (mplstereonet draws one arc per call)
+    strike, dip = _unpack_args(strike, dip, ("strike", "dip"))
     for n in range(len(strike)):
         ax.plane(strike[n], dip[n], label=label if n == 0 else None, **kwargs)
 
 
-def stereo_arrow(ax, from_xy, to_xy,
-                 color="k", arrowsize=1.0, linewidth=1.0, alpha=1.0,
-                 label=None, **kwargs):
+def stereo_arrow(
+    ax, from_xy, to_xy,
+    color="k", arrowsize=1.0, linewidth=1.0, alpha=1.0,
+    label=None, **kwargs,
+):
+    """Plot a directed arrow on a stereonet between two projected points."""
+    ax.annotate(
+        "",
+        xy=to_xy,
+        xytext=from_xy,
+        arrowprops=dict(
+            arrowstyle="->,head_length={0},head_width={1}".format(
+                0.4 * arrowsize, 0.25 * arrowsize,
+            ),
+            color=color,
+            lw=linewidth,
+            alpha=alpha,
+        ),
+        label=label,
+        **kwargs,
+    )
+
+
+def stereo_slip_arrow(
+    ax, strike, dip, signed_rake,
+    color="k", arrowsize=1.0, linewidth=1.0, length=0.08, label=None,
+):
     """
-    Plot a directed arrow on a stereonet between two projected points.
+    Draw a slip direction arrow on a stereonet for a fault plane.
+
+    The arrow is anchored at the slip line's stereonet position and points
+    toward the pole for reverse sense (rake > 0) or away for normal sense
+    (rake < 0), following the Aki & Richards convention.
 
     Parameters
     ----------
     ax : mplstereonet axes
-    from_xy : tuple of float
-        Arrow tail (x, y) in projected stereonet coordinates.
-    to_xy : tuple of float
-        Arrow head (x, y) in projected stereonet coordinates.
+    strike, dip : float
+        Fault plane orientation in degrees.
+    signed_rake : float
+        Signed rake in degrees (Aki & Richards convention, (-180, 180]).
     color : str
     arrowsize : float
-        Scale factor for the arrowhead.
+        Scales arrow head size.
     linewidth : float
-    alpha : float
+    length : float
+        Arrow length in projected stereonet coordinates (radians).
     label : str, optional
-    **kwargs
-        Extra kwargs forwarded to ``ax.annotate``.
     """
-    ax.annotate("",
-                xy=to_xy,
-                xytext=from_xy,
-                arrowprops=dict(
-                    arrowstyle="->,head_length={0},head_width={1}".format(
-                        0.4 * arrowsize, 0.25 * arrowsize),
-                    color=color,
-                    lw=linewidth,
-                    alpha=alpha,
-                ),
-                label=label,
-                **kwargs)
+    plunge, azm = line_rake2sphe(strike, dip, abs(signed_rake))
+
+    sx, sy = mplstereonet.line(plunge, azm)
+    sx, sy = sx[0], sy[0]
+    px, py = mplstereonet.pole(strike, dip)
+    px, py = px[0], py[0]
+
+    dist = np.hypot(px - sx, py - sy)
+    if dist < 1e-12:
+        return
+
+    dx, dy = (px - sx) / dist, (py - sy) / dist
+    if signed_rake < 0:
+        dx, dy = -dx, -dy
+
+    stereo_arrow(ax, (sx, sy), (sx + length * dx, sy + length * dy),
+                 color=color, arrowsize=arrowsize, linewidth=linewidth, label=label)
 
 
-def stereo_contour(ax, plunge, azimuth=None, label=None, color="k", levels=4,
-                   sigma=2, linewidth=1.0, **kwargs):
+def stereo_contour(
+    ax, plunge, azimuth=None, label=None,
+    color="k", levels=4, sigma=2, linewidth=1.0, **kwargs,
+):
     """
     Plot kernel density contour lines of line elements on a stereonet.
-
-    Accepts either separate arrays or a packed (N, 2) array for
-    backward compatibility.
-
-    Parameters
-    ----------
-    ax : mplstereonet axes
-    plunge : array-like shape (N,) or (N, 2)
-        Plunge in degrees. If shape (N, 2) and ``azimuth`` is None,
-        interpreted as packed [plunge, azimuth] pairs.
-    azimuth : array-like shape (N,), optional
-        Azimuth in degrees. Required unless ``plunge`` is packed.
-    label : str, optional
-    color : str
-    levels : int
-    sigma : float
-    linewidth : float
-    **kwargs
-        Extra kwargs forwarded to ``ax.density_contour``.
+    Accepts separate arrays or a packed (N, 2) array.
     """
-    plunge = np.asarray(plunge, dtype=float)
-    if azimuth is None:
-        packed = np.atleast_2d(plunge)
-        plunge, azimuth = packed[:, 0], packed[:, 1]
-    else:
-        azimuth = np.asarray(azimuth, dtype=float)
-
-    ax.density_contour(plunge, azimuth,
-                       measurement="lines", colors=color,
-                       levels=levels, sigma=sigma,
-                       linewidths=linewidth, **kwargs)
+    plunge, azimuth = _unpack_args(plunge, azimuth, ("plunge", "azimuth"))
+    ax.density_contour(
+        plunge, azimuth, measurement="lines", colors=color,
+        levels=levels, sigma=sigma, linewidths=linewidth, **kwargs,
+    )
