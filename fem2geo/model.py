@@ -556,7 +556,6 @@ class Model:
             Output file path.
         """
         self.grid.save(str(path))
-        log.info(f"Saved model to {path}")
 
     # internal
 

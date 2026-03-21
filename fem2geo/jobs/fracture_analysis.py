@@ -7,8 +7,7 @@ and model principal directions together on a stereonet.
 
 Structural data is read from CSV files via
 :func:`fem2geo.internal.io.load_structural_csv`. Only ``strike, dip`` columns
-are supported (:class:`FractureData`). Fault data (``strike, dip, rake``) is
-skipped — use the ``wallace_bott`` job for fault analysis.
+are supported (:class:`FractureData`).
 
 Multiple datasets can be provided — each gets a distinct colour and legend
 entry. The model's average σ1/σ2/σ3 directions are overlaid with the standard
@@ -29,11 +28,9 @@ zone:
   radius: r                         # sphere only
   # dim: [dx, dy, dz]               # box only
 
-data:                               # one or more named structural datasets
-  fractures:
-    file: path/to/fractures.csv
-  faults:                           # loaded but not yet plotted
-    file: path/to/faults.csv
+data:                               # one or more named fracture datasets
+  set_a: path/to/fractures_a.csv
+  set_b: path/to/fractures_b.csv
 
 plot:
   title: "Model vs field data"
@@ -41,7 +38,6 @@ plot:
   dpi: 200
   avg_directions:                   # model average σ1/σ2/σ3 (default: show=true)
     show: true
-    color: "k"
     markersize: 8
   cell_directions:                  # per-cell model directions (default: show=false)
     show: false
@@ -49,6 +45,9 @@ plot:
     color: "grey"
     markersize: 3
     alpha: 0.3
+  data:                             # shared style for all fracture pole datasets
+    markersize: 6
+    alpha: 0.8
 
 output:
   dir: results/                     # optional, defaults to config file directory
@@ -65,12 +64,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
 from fem2geo.plots import (
-    PlotConfig, MODEL_COLORS,
-    stereo_line, stereo_pole, stereo_contour,
+    PlotConfig,
+    MODEL_COLORS,
+    stereo_line,
+    stereo_pole,
+    stereo_contour,
 )
 from fem2geo.runner import parse_config
 from fem2geo.utils.transform import line_enu2sphe
@@ -78,127 +79,131 @@ from fem2geo.utils.transform import line_enu2sphe
 log = logging.getLogger("fem2geoLogger")
 
 
-def run(cfg: dict, job_dir: Path) -> None:
-    # config
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
+# Plot defaults
 
-    title = plot.get("title", "Model vs structural data")
-    figsize = plot.get("figsize", [8, 8])
-    dpi = plot.get("dpi", 200)
+AVG_STYLE = PlotConfig(color=MODEL_COLORS[0], markersize=8, markeredgecolor="k")
+CELL_STYLE = PlotConfig(color="grey", markersize=3, alpha=0.3)
+CONTOUR_STYLE = PlotConfig(color="grey", levels=4, sigma=2.0, linewidth=1.0)
+DATA_STYLE = PlotConfig(markersize=6, alpha=0.8, marker="+")
+
+
+# Main job
+
+def run(cfg: dict, job_dir: Path) -> None:
+
+    # Load configs
+    schema, zone, data, plot, out = parse_config(cfg, job_dir)
     out_dir = Path(out.get("dir", job_dir))
-    save_vtu = out.get("save_vtu", False)
 
     avg_cfg = plot.get("avg_directions", {})
-    cell_cfg = plot.get("cell_directions", {})
     show_avg = avg_cfg.get("show", True)
+    avg_style = AVG_STYLE.update(avg_cfg)
+
+    cell_cfg = plot.get("cell_directions", {})
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
+    cell_pc = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(
+        cell_cfg
+    )
 
-    avg_style = PlotConfig.avg().update(avg_cfg)
-    cell_pc = (PlotConfig.density() if cell_style == "contour"
-               else PlotConfig.cell()).update(cell_cfg)
-
-    if "data" not in cfg or not cfg["data"]:
-        raise ValueError("Config must contain a non-empty 'data' section.")
-    if "model" not in cfg:
-        raise ValueError("Config must contain a 'model' key.")
-
-    out_dir.mkdir(parents=True, exist_ok=True)
+    data_style = DATA_STYLE.update(plot.get("data", {}))
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
     sub = model.extract(zone)
-
     log.info(f"  {sub.n_cells} cells in zone")
 
-    if save_vtu:
-        sub.save(out_dir / "extract.vtu")
-
     # load structural datasets
-    data_entries = cfg["data"]
-    datasets = {}
-    for name, entry in data_entries.items():
-        file_path = entry if isinstance(entry, str) else entry.get("file")
-        if file_path is None:
-            raise ValueError(f"Dataset '{name}' must have a 'file' key.")
-
-        sd = load_structural_csv((job_dir / file_path).resolve())
-
-        if isinstance(sd, FaultData):
-            log.warning(
-                f"  '{name}' is fault data (strike/dip/rake). "
-                f"Fault comparison requires strain tensor derivation and is not "
-                f"yet implemented — skipping."
-            )
-            continue
-
-        datasets[name] = sd
-
-    if not datasets:
-        log.warning("No plottable structural datasets after filtering. Nothing to compare.")
+    datasets = {
+        name: load_structural_csv((job_dir / path).resolve())
+        for name, path in cfg["data"].items()
+    }
 
     # figure
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
-
     legend_elements = [
-        Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
-        Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
-        Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
+        Line2D(
+            [0],
+            [0],
+            color=avg_style.color,
+            linewidth=0,
+            marker="o",
+            label=r"$\sigma_1$",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=avg_style.color,
+            linewidth=0,
+            marker="s",
+            label=r"$\sigma_2$",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=avg_style.color,
+            linewidth=0,
+            marker="v",
+            label=r"$\sigma_3$",
+        ),
     ]
 
-    # cell directions (model spread)
+    # cell directions
     if show_cell:
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
         p3, a3 = line_enu2sphe(sub.dir_s3)
-        fn = stereo_contour if cell_style == "contour" else stereo_line
-
-        fn(ax, p1, a1, **cell_pc.as_kwargs(cell_style, "o"))
-        fn(ax, p2, a2, **cell_pc.as_kwargs(cell_style, "s"))
-        fn(ax, p3, a3, **cell_pc.as_kwargs(cell_style, "v"))
+        if cell_style == "contour":
+            kw = cell_pc.kwargs()
+            stereo_contour(ax, p1, a1, **kw)
+            stereo_contour(ax, p2, a2, **kw)
+            stereo_contour(ax, p3, a3, **kw)
+        else:
+            stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
+            stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
+            stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
 
     # average principal directions
     if show_avg:
-        _, vec = sub.avg_principal()
+        _, vec = sub.avg_principals("stress")
         p1, a1 = line_enu2sphe(vec[:, 0])
         p2, a2 = line_enu2sphe(vec[:, 1])
         p3, a3 = line_enu2sphe(vec[:, 2])
-        stereo_line(ax, p1, a1, label=r"$\sigma_1$",
-                    **avg_style.scatter_kwargs("o"))
-        stereo_line(ax, p2, a2, label=r"$\sigma_2$",
-                    **avg_style.scatter_kwargs("s"))
-        stereo_line(ax, p3, a3, label=r"$\sigma_3$",
-                    **avg_style.scatter_kwargs("v"))
-
-    # fracture datasets (poles)
-    data_colors = MODEL_COLORS[:len(datasets)]
-
-    for color, (name, fd) in zip(data_colors, datasets.items()):
-        entry = data_entries[name]
-        data_pc = PlotConfig.cell(color=color).update(
-            entry if isinstance(entry, dict) else {}
+        stereo_line(
+            ax, p1, a1, label=r"$\sigma_1$", **avg_style.update(marker="o").kwargs()
         )
-        data_pc = PlotConfig.from_cfg(data_pc, {"markersize": 6, "alpha": 0.8})
+        stereo_line(
+            ax, p2, a2, label=r"$\sigma_2$", **avg_style.update(marker="s").kwargs()
+        )
+        stereo_line(
+            ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs()
+        )
 
+    # fracture datasets — colors start at MODEL_COLORS[1] to avoid clashing with avg
+    data_colors = MODEL_COLORS[1 : len(datasets) + 1]
+    for color, (name, fd) in zip(data_colors, datasets.items()):
         stereo_pole(
-            ax, fd.strikes, fd.dips,
-            label=f"{name} (poles)",
-            color=color, marker="+",
-            markersize=data_pc.markersize, alpha=data_pc.alpha,
+            ax,
+            fd.planes[:, 0],
+            fd.planes[:, 1],
+            label=f"{name}",
+            **data_style.update(color=color).kwargs(),
         )
         legend_elements.append(
-            Line2D([0], [0], color=color, linewidth=0, marker="+",
-                   label=f"{name} (poles)"))
+            Line2D([0], [0], color=color, linewidth=0, marker="+", label=name)
+        )
 
-    # finalise
+    if out.get("save_vtu", False):
+        sub.save(out_dir / "extract.vtu")
+
     ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(title, y=1.08)
-
-    out_path = out_dir / "fracture_analysis.png"
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    ax.set_title(plot.get("title", "Model vs Fracture Data"), y=1.08)
+    fig.savefig(
+        out_dir / "fracture_analysis.png", dpi=plot.get("dpi", 200), bbox_inches="tight"
+    )
     plt.close(fig)
-    log.info(f"Saved: {out_path}")
+    log.info(f"Saved results: {out_dir}")

@@ -9,13 +9,17 @@ zone:
   radius: 1
 
 data:
-  fractures:
-    file: ../data/fractures.csv
+  Set A: ../data/fractures.csv
+  Set B: ../data/fractures_b.csv
 
 plot:
-  title: "Structural data vs model stress — with cell spread"
+  title: "Fractures and Model principal directions comparison"
   figsize: [ 9, 9 ]
   dpi: 300
+  data:
+    markersize: 5
+    alpha: 0.6
+    marker: "."
   avg_directions:
     show: true
     markersize: 10

@@ -65,15 +65,9 @@ from fem2geo.utils.transform import line_enu2sphe
 log = logging.getLogger("fem2geoLogger")
 
 # default styles
-AVG_STYLE = PlotConfig(
-    color="red", markersize=8, markeredgecolor="k",
-)
-CELL_STYLE = PlotConfig(
-    color="red", markersize=3, markeredgecolor="none", alpha=0.4,
-)
-CONTOUR_STYLE = PlotConfig(
-    color="red", levels=4, sigma=2.0, linewidth=1.0,
-)
+AVG_STYLE = PlotConfig(color="red", markersize=8, markeredgecolor="k")
+CELL_STYLE = PlotConfig(color="red", markersize=3, markeredgecolor="none", alpha=0.4)
+CONTOUR_STYLE = PlotConfig(color="red", levels=4, sigma=2.0, linewidth=1.0)
 
 
 # main job

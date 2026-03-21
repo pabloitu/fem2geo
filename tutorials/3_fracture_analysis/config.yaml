@@ -9,5 +9,4 @@ zone:
   radius: 1
 
 data:
-  fractures:
-    file: ../data/fractures.csv
+  fractures: ../data/fractures.csv
