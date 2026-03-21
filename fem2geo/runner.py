@@ -6,7 +6,6 @@ from pathlib import Path
 import yaml
 
 from fem2geo.internal.logger import setup_logger
-from fem2geo.internal.schema import ModelSchema
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -19,7 +18,42 @@ _JOBS = {
 }
 
 
-def parse_config(cfg, job_dir):
+def load_config(path: Path) -> dict:
+    with open(path) as f:
+        cfg = yaml.safe_load(f)
+    if "job" not in cfg:
+        raise ValueError(
+            f"Job config '{path}' is missing required key 'job'."
+        )
+    return cfg
+
+
+def parse_config(cfg: dict, job_dir: Path) -> tuple:
+    """
+    Parse the shared top-level config keys.
+
+    Returns the schema (constructed from the config) and the raw
+    section dicts for zone, plot, and output. Creates the output
+    directory if it doesn't exist.
+
+    Parameters
+    ----------
+    cfg : dict
+        Full job config as loaded from YAML.
+    job_dir : Path
+        Directory containing the config file (used as default
+        output directory).
+
+    Returns
+    -------
+    schema : ModelSchema
+    zone : dict
+    plot : dict
+    out : dict
+        Output config with ``dir`` resolved to an absolute Path.
+    """
+    from fem2geo.internal.schema import ModelSchema
+
     schema = ModelSchema.builtin(
         cfg.get("schema", "adeli"), units=cfg.get("units")
     )
@@ -27,17 +61,9 @@ def parse_config(cfg, job_dir):
     data = cfg.get("data", {})
     plot = cfg.get("plot", {})
     out = cfg.get("output", {})
-    out["dir"] = Path(out.get("dir", job_dir))
+    out["dir"] = Path(out.get("dir", job_dir)).resolve()
     out["dir"].mkdir(parents=True, exist_ok=True)
     return schema, zone, data, plot, out
-
-def _load_config(path: Path) -> dict:
-    with open(path) as f:
-        cfg = yaml.safe_load(f)
-    if "job" not in cfg:
-        raise ValueError(f"Job config '{path}' is missing required key 'job'.")
-    return cfg
-
 
 def run(job_path: Path) -> None:
     """
@@ -61,7 +87,7 @@ def run(job_path: Path) -> None:
     if not job_path.exists():
         raise FileNotFoundError(f"Job file not found: {job_path}")
 
-    cfg      = _load_config(job_path)
+    cfg      = load_config(job_path)
     job_type = cfg["job"]
 
     if job_type not in _JOBS:

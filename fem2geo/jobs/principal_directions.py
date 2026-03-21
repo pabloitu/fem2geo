@@ -2,49 +2,48 @@
 Job: principal_directions
 =========================
 Probes a model at a given location by plotting principal stress directions
-on a stereonet. By default shows the average stress directions only.
-Cell directions can be enabled to visualise the spread around the average.
-Multiple models can be compared at the same zone — each gets a distinct colour.
+on a stereonet. By default, shows the average stress directions only. Cell
+directions can be enabled to visualise the spread around the average.
+Multiple models can be compared at the same zone — each gets a distinct
+colour.
 
 Config reference
 ----------------
 job: principal_directions
-schema: adeli                   # built-in schema name (default: adeli)
-units:                          # optional category-level unit overrides
+schema: adeli
+units:
   pressure: Pa
 
-model: path/to/model.vtk        # single model — relative to this config file
+model: path/to/model.vtk
 # OR
-models:                         # multiple models for comparison
+models:
   model_a: path/to/model_a.vtu
   model_b: path/to/model_b.vtu
 
 zone:
-  type: sphere                  # sphere | box
+  type: sphere
   center: [x, y, z]
-  radius: r                     # sphere only
-  # dim: [dx, dy, dz]           # box only
+  radius: r
 
 plot:
   title: "Principal stress directions"
   figsize: [8, 8]
   dpi: 200
-  avg_directions:               # average stress directions (default: show=true)
+  avg_directions:
     show: true
-    color: "white"              # overridden per model in multi-model mode
+    color: "white"
     markersize: 8
-    alpha: 1.0
-  cell_directions:              # per-cell directions, shows spread (default: show=false)
+  cell_directions:
     show: false
-    style: scatter              # scatter | contour
-    color: "k"                  # overridden per model in multi-model mode
+    style: scatter
+    color: "k"
     markersize: 3
     alpha: 0.4
-    # contour options: levels, sigma, linewidth
 
 output:
-  dir: results/                 # optional, defaults to config file directory
-  save_vtu: false               # save extracted sub-model(s) for Paraview
+  dir: results/
+  figure: principal_directions.png
+  vtu: extract.vtu
 
 Example
 -------
@@ -65,98 +64,109 @@ from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
+# default styles
+AVG_STYLE = PlotConfig(
+    color="red", markersize=8, markeredgecolor="k",
+)
+CELL_STYLE = PlotConfig(
+    color="red", markersize=3, markeredgecolor="none", alpha=0.4,
+)
+CONTOUR_STYLE = PlotConfig(
+    color="red", levels=4, sigma=2.0, linewidth=1.0,
+)
 
+
+# main job
 def run(cfg: dict, job_dir: Path) -> None:
-    # Config
 
+    # parse configuration file
+    # schema: map file fields to internal (see fem2geo/internal/schemas)
+    # zone, plot, data and out: groups in config file
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
+    out_dir = out["dir"]
 
-    title = plot.get("title", "Principal stress directions")
-    figsize = plot.get("figsize", [8, 8])
-    dpi = plot.get("dpi", 200)
-    out_dir = Path(out.get("dir", job_dir))
-    save_vtu = out.get("save_vtu", False)
+    # model paths
+    models = cfg.get("models", {"model": cfg.get("model")})
 
-    avg_cfg = plot.get("avg_directions", {})
-    cell_cfg = plot.get("cell_directions", {})
-    show_avg = avg_cfg.get("show", True)
-    show_cell = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")
+    # plot options
+    avg_cfg = plot.get("avg_directions", {})    # Config for model average eigenvectors
+    avg_show = avg_cfg.get("show", True)
+    avg_plot_config = AVG_STYLE.update(avg_cfg)
 
-    avg_style = PlotConfig.avg().update(avg_cfg)
-    cell_pc = (PlotConfig.density() if cell_style == "contour"
-               else PlotConfig.cell()).update(cell_cfg)
+    cell_cfg = plot.get("cell_directions", {}) # Config for each cell eigenvectors
+    cell_show = cell_cfg.get("show", False)
+    cell_style = cell_cfg.get("style", "scatter")  # plotted as scatter or contour
+    cell_plot_config = CONTOUR_STYLE.update(cell_cfg) if cell_style == "contour" \
+        else CELL_STYLE.update(cell_cfg)
 
-    if "models" in cfg:
-        model_paths = cfg["models"]
-    elif "model" in cfg:
-        model_paths = {"model": cfg["model"]}
-    else:
-        raise ValueError("Config must contain 'model' or 'models'.")
-    model_names = list(model_paths.keys())
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    colors = MODEL_COLORS[:len(model_paths)]
-
-    # Figure
-    fig = plt.figure(figsize=figsize)
+    # figure
+    fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
-
-    legend_elements = [
-        Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
-        Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
-        Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
+    legend = [
+        Line2D([0], [0], color="k", lw=0, marker="o", label=r"$\sigma_1$"),
+        Line2D([0], [0], color="k", lw=0, marker="s", label=r"$\sigma_2$"),
+        Line2D([0], [0], color="k", lw=0, marker="v", label=r"$\sigma_3$"),
     ]
 
-    # Per-model loop
-    for color, name in zip(colors, model_names):
-
-        path = (job_dir / model_paths[name]).resolve()
+    # per-model loop
+    colors = MODEL_COLORS[: len(models)]
+    for color, name in zip(colors, models):
+        path = (job_dir / models[name]).resolve() # get model's filepath
         log.info(f"Loading {name}: {path}")
 
-        model = Model.from_file(path, schema)
-        model = model.extract(zone)
+        model = Model.from_file(path, schema)   # Load model
+        model = model.extract(zone)             # Select zone to probe
 
-        log.info(f"  {model.n_cells} cells in zone")
+        log.info(f"Processing results...")
+        if cell_show:
+            plunge1, azimuth1 = line_enu2sphe(model.dir_s1)  # ENU to Spherical coords
+            plunge2, azimuth2 = line_enu2sphe(model.dir_s2)
+            plunge3, azimuth3 = line_enu2sphe(model.dir_s3)
 
-        if save_vtu:
-            model.save(out_dir / f"{name}_extract.vtu")
+            cpc = cell_plot_config.update(color=color)  # Update by model's color
 
-        # Cell directions (batched)
-        if show_cell:
-            p1, a1 = line_enu2sphe(model.dir_s1)
-            p2, a2 = line_enu2sphe(model.dir_s2)
-            p3, a3 = line_enu2sphe(model.dir_s3)
-            cpc = PlotConfig.from_cfg(cell_pc, {"color": color})
-            fn = stereo_contour if cell_style == "contour" else stereo_line
+            if cell_style == "contour":
+                stereo_contour(ax, plunge1, azimuth1, **cpc.kwargs())
+                stereo_contour(ax, plunge2, azimuth2, **cpc.kwargs())
+                stereo_contour(ax, plunge3, azimuth3, **cpc.kwargs())
+            else:
+                stereo_line(ax, plunge1, azimuth1, **cpc.update(marker="o").kwargs())
+                stereo_line(ax, plunge2, azimuth2, **cpc.update(marker="s").kwargs())
+                stereo_line(ax, plunge3, azimuth3, **cpc.update(marker="v").kwargs())
 
-            fn(ax, p1, a1, **cpc.as_kwargs(cell_style, "o"))
-            fn(ax, p2, a2, **cpc.as_kwargs(cell_style, "s"))
-            fn(ax, p3, a3, **cpc.as_kwargs(cell_style, "v"))
+        if avg_show:
+            _, vec = model.avg_principal()  # get eigenvectors of averaged tensor
 
-        # Average stress principal directions
-        if show_avg:
-            _, vec = model.avg_principal()
-            avg_pc = PlotConfig.from_cfg(avg_style, {"color": color})
-            label = name if len(model_paths) > 1 else None
+            label = name if len(models) > 1 else None
+            plunge1, azimuth1 = line_enu2sphe(vec[:, 0])
+            plunge2, azimuth2 = line_enu2sphe(vec[:, 1])
+            plunge3, azimuth3 = line_enu2sphe(vec[:, 2])
 
-            p1, a1 = line_enu2sphe(vec[:, 0])
-            p2, a2 = line_enu2sphe(vec[:, 1])
-            p3, a3 = line_enu2sphe(vec[:, 2])
-            stereo_line(ax, p1, a1, label=label, **avg_pc.scatter_kwargs("o"))
-            stereo_line(ax, p2, a2, **avg_pc.scatter_kwargs("s"))
-            stereo_line(ax, p3, a3, **avg_pc.scatter_kwargs("v"))
+            apc = avg_plot_config.update(color=color)
+            stereo_line(
+                ax,
+                plunge1,
+                azimuth1,
+                label=label,
+                **apc.update(marker="o").kwargs(),
+            )
+            stereo_line(ax, plunge2, azimuth2, **apc.update(marker="s").kwargs())
+            stereo_line(ax, plunge3, azimuth3, **apc.update(marker="v").kwargs())
 
-        if len(model_paths) > 1:
-            legend_elements.append(Patch(facecolor=color, edgecolor="k", label=name))
+        if len(models) > 1:
+            legend.append(Patch(facecolor=color, edgecolor="k", label=name))
+    log.info("Done")
 
-    # Finalise
-    if legend_elements:
-        ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(title, y=1.08)
-
-    out_path = out_dir / "principal_directions.png"
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    # save
+    if "vtu" in out:
+        model.save(out_dir / out["vtu"])
+    if legend:
+        ax.legend(handles=legend, fontsize=7)
+    ax.set_title(plot.get("title", "Principal stress directions"), y=1.08)
+    fig.savefig(
+        out_dir / out.get("figure", "principal_directions.png"),
+        dpi=plot.get("dpi", 200), bbox_inches="tight",
+    )
     plt.close(fig)
-    log.info(f"Saved: {out_path}")
+    log.info(f"Saved results in: {out_dir}")

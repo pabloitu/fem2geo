@@ -105,10 +105,9 @@ def load_grid(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
                 (loaded if ok else skipped).append(
                     tag if ok else solver_key)
 
-    log.info(f"Loaded {path}")
-    log.info(f"  fields: {', '.join(sorted(loaded))}")
+    log.info(f"  Fields: {', '.join(sorted(loaded))}")
     if skipped:
-        log.warning(f"  not found in file: {', '.join(sorted(skipped))}")
+        log.warning(f"  Not found: {', '.join(sorted(skipped))}")
 
     return grid
 

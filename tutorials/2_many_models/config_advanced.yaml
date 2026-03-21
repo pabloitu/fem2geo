@@ -27,4 +27,5 @@ plot:
     linewidth: 1.5
 
 output:
-  save_vtu: false
+  dir: results/
+  figure: multiple_models.png
