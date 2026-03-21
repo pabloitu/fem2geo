@@ -9,11 +9,10 @@ zone:
   radius: 0.5
 
 data:
-  faults:
-    file: ../data/faults.csv
+  faults: ../data/faults.csv
 
 plot:
-  title: "Resolved Shear Stress — observed vs predicted slip"
+  title: "Resolved Shear Stress — Observed vs Predicted slip"
   figsize: [9, 9]
   dpi: 300
   fault_planes:
@@ -22,13 +21,13 @@ plot:
     color: "grey"
     alpha: 0.6
   observed_slip:
-    color: "#E63946"
-    marker: "o"
-    markersize: 7
+    color: "green"
+    arrowsize: 1.2
+    linewidth: 1.5
   predicted_slip:
-    color: "#2196F3"
-    marker: "d"
-    markersize: 7
+    color: "lightblue"
+    arrowsize: 1.2
+    linewidth: 1.5
   avg_directions:
     show: true
     markersize: 10

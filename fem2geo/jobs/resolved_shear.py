@@ -40,8 +40,7 @@ zone:
   # dim: [dx, dy, dz]               # box only
 
 data:
-  faults:
-    file: path/to/faults.csv        # columns: strike, dip, rake (signed)
+  faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
 plot:
   title: "Resolved shear analysis"
@@ -79,7 +78,6 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import mplstereonet
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch
@@ -92,79 +90,23 @@ from fem2geo.plots import (
     stereo_line,
     stereo_pole,
     stereo_plane,
-    stereo_arrow,
+    stereo_slip_arrow,
 )
 from fem2geo.runner import parse_config
 from fem2geo.utils.tensor import resolved_shear_enu
-from fem2geo.utils.transform import line_enu2sphe, line_rake2sphe, slip_enu2rake
+from fem2geo.utils.transform import line_enu2sphe, slip_enu2rake
 
 log = logging.getLogger("fem2geoLogger")
 
-# constant arrow length in projected stereonet coordinates (radians)
-_ARROW_LENGTH = 0.08
-
-
-def _slip_arrow(strike, dip, signed_rake, arrow_length=_ARROW_LENGTH):
-    """
-    Compute projected arrow start/end for a slip vector on a fault plane.
-
-    The arrow starts at the slip line's stereonet position (from the
-    unsigned rake) and points toward the plane's pole (reverse sense,
-    rake > 0) or away from it (normal sense, rake < 0).
-
-    Parameters
-    ----------
-    strike, dip : float
-        Fault plane orientation in degrees.
-    signed_rake : float
-        Signed rake in degrees (Aki & Richards convention, (-180, 180]).
-    arrow_length : float
-        Arrow length in projected (radians) coordinates.
-
-    Returns
-    -------
-    from_xy, to_xy : tuple of float
-        (x, y) in projected stereonet coordinates for arrow tail and head.
-    """
-    # stereonet position from unsigned rake
-    plunge, azm = line_rake2sphe(strike, dip, abs(signed_rake))
-
-    # slip position in projected coords
-    sx, sy = mplstereonet.line(plunge, azm)
-    sx, sy = sx.item(), sy.item()
-
-    # pole position in projected coords
-    px, py = mplstereonet.pole(strike, dip)
-    px, py = px.item(), py.item()
-
-    # direction from slip position toward pole
-    dx, dy = px - sx, py - sy
-    dist = np.hypot(dx, dy)
-    if dist < 1e-12:
-        return (sx, sy), (sx, sy)
-
-    dx, dy = dx / dist, dy / dist
-
-    # reverse sense (rake > 0): arrow toward pole
-    # normal sense (rake < 0): arrow away from pole
-    if signed_rake < 0:
-        dx, dy = -dx, -dy
-
-    to_x = sx + arrow_length * dx
-    to_y = sy + arrow_length * dy
-
-    return (sx, sy), (to_x, to_y)
+AVG_STYLE = PlotConfig(color="k", markersize=8, markeredgecolor="k")
+OBS_STYLE = {"color": "#E63946", "arrowsize": 1.0, "linewidth": 1.5}
+PRED_STYLE = {"color": "#2196F3", "arrowsize": 1.0, "linewidth": 1.5}
+PLANE_STYLE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    # config
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
-
-    title = plot.get("title", "Resolved shear analysis")
-    figsize = plot.get("figsize", [8, 8])
-    dpi = plot.get("dpi", 200)
     out_dir = Path(out.get("dir", job_dir))
-    save_vtu = out.get("save_vtu", False)
 
     plane_cfg = plot.get("fault_planes", {})
     obs_cfg = plot.get("observed_slip", {})
@@ -174,42 +116,37 @@ def run(cfg: dict, job_dir: Path) -> None:
     show_planes = plane_cfg.get("show", True)
     plane_style = plane_cfg.get("style", "planes")
     show_avg = avg_cfg.get("show", True)
+    avg_style = AVG_STYLE.update(avg_cfg)
 
-    if "data" not in cfg or not cfg["data"]:
-        raise ValueError("Config must contain a non-empty 'data' section.")
-    if "model" not in cfg:
-        raise ValueError("Config must contain a 'model' key.")
-
-    out_dir.mkdir(parents=True, exist_ok=True)
+    obs_color = obs_cfg.get("color", OBS_STYLE["color"])
+    obs_arrowsize = obs_cfg.get("arrowsize", OBS_STYLE["arrowsize"])
+    obs_lw = obs_cfg.get("linewidth", OBS_STYLE["linewidth"])
+    pred_color = pred_cfg.get("color", PRED_STYLE["color"])
+    pred_arrowsize = pred_cfg.get("arrowsize", PRED_STYLE["arrowsize"])
+    pred_lw = pred_cfg.get("linewidth", PRED_STYLE["linewidth"])
+    plane_color = plane_cfg.get("color", PLANE_STYLE["color"])
+    plane_alpha = plane_cfg.get("alpha", PLANE_STYLE["alpha"])
+    plane_lw = plane_cfg.get("linewidth", PLANE_STYLE["linewidth"])
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
     log.info(f"Loading model: {model_path}")
     model = Model.from_file(model_path, schema)
-
     sub = model.extract(zone)
-
     log.info(f"  {sub.n_cells} cells in zone")
 
-    if save_vtu:
+    if out.get("save_vtu", False):
         sub.save(out_dir / "extract.vtu")
 
-    # average stress tensor
     avg_stress = sub.avg_tensor("stress")
 
     # load fault datasets
-    data_entries = cfg["data"]
     fault_datasets = {}
-    for name, entry in data_entries.items():
+    for name, entry in cfg["data"].items():
         file_path = entry if isinstance(entry, str) else entry.get("file")
-        if file_path is None:
-            raise ValueError(f"Dataset '{name}' must have a 'file' key.")
-
         sd = load_structural_csv((job_dir / file_path).resolve())
         if not isinstance(sd, FaultData):
-            log.warning(
-                f"  '{name}' is not fault data (needs strike/dip/rake columns) — skipping."
-            )
+            log.warning(f"  '{name}' has no rake column — skipping.")
             continue
         fault_datasets[name] = sd
 
@@ -219,25 +156,14 @@ def run(cfg: dict, job_dir: Path) -> None:
         )
 
     # figure
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
-
-    # style
-    obs_color = obs_cfg.get("color", "#E63946")
-    obs_arrowsize = obs_cfg.get("arrowsize", 1.0)
-    obs_lw = obs_cfg.get("linewidth", 1.5)
-    pred_color = pred_cfg.get("color", "#2196F3")
-    pred_arrowsize = pred_cfg.get("arrowsize", 1.0)
-    pred_lw = pred_cfg.get("linewidth", 1.5)
-    plane_color = plane_cfg.get("color", "grey")
-    plane_alpha = plane_cfg.get("alpha", 0.5)
-    plane_lw = plane_cfg.get("linewidth", 0.8)
 
     # plot fault data
     for name, fd in fault_datasets.items():
         for i in range(len(fd)):
-            strike, dip, rk = fd.strikes[i], fd.dips[i], fd.rakes[i]
+            strike, dip, rk = fd.planes[i, 0], fd.planes[i, 1], fd.rakes[i]
 
             # fault plane
             if show_planes:
@@ -261,21 +187,26 @@ def run(cfg: dict, job_dir: Path) -> None:
                         alpha=plane_alpha,
                     )
 
-            # observed slip arrow (signed rake from data)
-            from_xy, to_xy = _slip_arrow(strike, dip, rk)
-            stereo_arrow(
-                ax, from_xy, to_xy, color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw
+            # observed slip arrow
+            stereo_slip_arrow(
+                ax,
+                strike,
+                dip,
+                rk,
+                color=obs_color,
+                arrowsize=obs_arrowsize,
+                linewidth=obs_lw,
             )
 
-            # predicted slip arrow (signed rake from resolved shear traction)
+            # predicted slip arrow (resolved shear traction)
             _, tau_hat = resolved_shear_enu(avg_stress, plane=[strike, dip])
             if np.linalg.norm(tau_hat) > 1e-12:
                 pred_rake = slip_enu2rake(tau_hat, strike, dip)
-                from_xy, to_xy = _slip_arrow(strike, dip, pred_rake)
-                stereo_arrow(
+                stereo_slip_arrow(
                     ax,
-                    from_xy,
-                    to_xy,
+                    strike,
+                    dip,
+                    pred_rake,
                     color=pred_color,
                     arrowsize=pred_arrowsize,
                     linewidth=pred_lw,
@@ -283,14 +214,13 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # average principal directions
     if show_avg:
-        avg_style = PlotConfig.avg().update(avg_cfg)
-        _, vec = sub.avg_principal()
+        _, vec = sub.avg_principals("stress")
         p1, a1 = line_enu2sphe(vec[:, 0])
         p2, a2 = line_enu2sphe(vec[:, 1])
         p3, a3 = line_enu2sphe(vec[:, 2])
-        stereo_line(ax, p1, a1, **avg_style.scatter_kwargs("o"))
-        stereo_line(ax, p2, a2, **avg_style.scatter_kwargs("s"))
-        stereo_line(ax, p3, a3, **avg_style.scatter_kwargs("v"))
+        stereo_line(ax, p1, a1, **avg_style.update(marker="o").kwargs())
+        stereo_line(ax, p2, a2, **avg_style.update(marker="s").kwargs())
+        stereo_line(ax, p3, a3, **avg_style.update(marker="v").kwargs())
 
     # legend
     legend_elements = [
@@ -339,17 +269,39 @@ def run(cfg: dict, job_dir: Path) -> None:
     if show_avg:
         legend_elements.extend(
             [
-                Line2D([0], [0], color="k", linewidth=0, marker="o", label=r"$\sigma_1$"),
-                Line2D([0], [0], color="k", linewidth=0, marker="s", label=r"$\sigma_2$"),
-                Line2D([0], [0], color="k", linewidth=0, marker="v", label=r"$\sigma_3$"),
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style.color,
+                    linewidth=0,
+                    marker="o",
+                    label=r"$\sigma_1$",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style.color,
+                    linewidth=0,
+                    marker="s",
+                    label=r"$\sigma_2$",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style.color,
+                    linewidth=0,
+                    marker="v",
+                    label=r"$\sigma_3$",
+                ),
             ]
         )
 
     ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(title, y=1.08)
-
-    # save
-    out_path = out_dir / "resolved_shear.png"
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    ax.set_title(plot.get("title", "Resolved shear analysis"), y=1.08)
+    fig.savefig(
+        out_dir / out.get("figure", "resolved_shear.png"),
+        dpi=plot.get("dpi", 200),
+        bbox_inches="tight",
+    )
     plt.close(fig)
-    log.info(f"Saved: {out_path}")
+    log.info(f"Saved results: {out_dir}")

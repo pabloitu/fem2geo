@@ -89,6 +89,7 @@ DATA_STYLE = PlotConfig(markersize=6, alpha=0.8, marker="+")
 
 # Main job
 
+
 def run(cfg: dict, job_dir: Path) -> None:
 
     # Load configs
@@ -197,13 +198,15 @@ def run(cfg: dict, job_dir: Path) -> None:
             Line2D([0], [0], color=color, linewidth=0, marker="+", label=name)
         )
 
-    if out.get("save_vtu", False):
-        sub.save(out_dir / "extract.vtu")
+    if out.get("vtu", False):
+        model.save(out_dir / out["vtu"])
 
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(plot.get("title", "Model vs Fracture Data"), y=1.08)
     fig.savefig(
-        out_dir / "fracture_analysis.png", dpi=plot.get("dpi", 200), bbox_inches="tight"
+        out_dir / out.get("figure", "fracture_analysis.png"),
+        dpi=plot.get("dpi", 200),
+        bbox_inches="tight",
     )
     plt.close(fig)
     log.info(f"Saved results: {out_dir}")

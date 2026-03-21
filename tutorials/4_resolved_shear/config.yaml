@@ -6,8 +6,7 @@ model: ../data/model_a.vtu
 zone:
   type: sphere
   center: [20, 20, -10]
-  radius: 0.5
+  radius: 0.5q
 
 data:
-  faults:
-    file: ../data/faults.csv
+  faults: ../data/faults.csv

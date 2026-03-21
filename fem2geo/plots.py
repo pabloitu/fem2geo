@@ -3,6 +3,8 @@ from dataclasses import dataclass, asdict
 import mplstereonet
 import numpy as np
 
+from fem2geo.utils.transform import line_rake2sphe
+
 
 MODEL_COLORS = [
     "#E63946",  # red
@@ -158,6 +160,51 @@ def stereo_arrow(
         label=label,
         **kwargs,
     )
+
+
+def stereo_slip_arrow(
+    ax, strike, dip, signed_rake,
+    color="k", arrowsize=1.0, linewidth=1.0, length=0.08, label=None,
+):
+    """
+    Draw a slip direction arrow on a stereonet for a fault plane.
+
+    The arrow is anchored at the slip line's stereonet position and points
+    toward the pole for reverse sense (rake > 0) or away for normal sense
+    (rake < 0), following the Aki & Richards convention.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    strike, dip : float
+        Fault plane orientation in degrees.
+    signed_rake : float
+        Signed rake in degrees (Aki & Richards convention, (-180, 180]).
+    color : str
+    arrowsize : float
+        Scales arrow head size.
+    linewidth : float
+    length : float
+        Arrow length in projected stereonet coordinates (radians).
+    label : str, optional
+    """
+    plunge, azm = line_rake2sphe(strike, dip, abs(signed_rake))
+
+    sx, sy = mplstereonet.line(plunge, azm)
+    sx, sy = sx[0], sy[0]
+    px, py = mplstereonet.pole(strike, dip)
+    px, py = px[0], py[0]
+
+    dist = np.hypot(px - sx, py - sy)
+    if dist < 1e-12:
+        return
+
+    dx, dy = (px - sx) / dist, (py - sy) / dist
+    if signed_rake < 0:
+        dx, dy = -dx, -dy
+
+    stereo_arrow(ax, (sx, sy), (sx + length * dx, sy + length * dy),
+                 color=color, arrowsize=arrowsize, linewidth=linewidth, label=label)
 
 
 def stereo_contour(
