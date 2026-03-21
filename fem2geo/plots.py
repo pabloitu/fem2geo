@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 import mplstereonet
 import numpy as np
 
+
 MODEL_COLORS = [
     "#E63946",  # red
     "#2196F3",  # blue
@@ -24,15 +25,14 @@ class PlotConfig:
     Use :meth:`update` to override fields from a config dict or kwargs,
     and :meth:`kwargs` to get a clean dict for matplotlib calls.
     """
-
-    color: str = None
-    marker: str = None
-    markersize: float = None
-    markeredgecolor: str = None
-    alpha: float = None
-    linewidth: float = None
-    levels: int = None
-    sigma: float = None
+    color:           str   = None
+    marker:          str   = None
+    markersize:      float = None
+    markeredgecolor: str   = None
+    alpha:           float = None
+    linewidth:       float = None
+    levels:          int   = None
+    sigma:           float = None
 
     def update(self, overrides=None, **kw):
         """Return a new PlotConfig with overrides applied."""
@@ -93,21 +93,28 @@ def stereo_field(
     return m
 
 
+def _unpack_args(first, second, kind):
+    """
+    Normalize separate or packed array inputs for stereonet functions.
+
+    Accepts either two separate arrays (plunge+azimuth or strike+dip)
+    or a single packed (N, 2) array as ``first``. Returns two 1-D arrays.
+    """
+    first = np.asarray(first, dtype=float)
+    if second is None:
+        if first.ndim == 0:
+            raise ValueError(f"{kind[1]} required for scalar {kind[0]}.")
+        packed = np.atleast_2d(first)
+        return packed[:, 0], packed[:, 1]
+    return np.atleast_1d(first), np.atleast_1d(np.asarray(second, dtype=float))
+
+
 def stereo_line(ax, plunge, azimuth=None, label=None, **kwargs):
     """
     Plot line elements on a stereonet. Accepts separate arrays or
     a packed (N, 2) array for backward compatibility.
     """
-    plunge = np.asarray(plunge, dtype=float)
-    if azimuth is None:
-        if plunge.ndim == 0:
-            raise ValueError("azimuth required for scalar plunge.")
-        packed = np.atleast_2d(plunge)
-        plunge, azimuth = packed[:, 0], packed[:, 1]
-    else:
-        azimuth = np.asarray(azimuth, dtype=float)
-        plunge = np.atleast_1d(plunge)
-        azimuth = np.atleast_1d(azimuth)
+    plunge, azimuth = _unpack_args(plunge, azimuth, ("plunge", "azimuth"))
     ax.line(plunge, azimuth, label=label, **kwargs)
 
 
@@ -116,16 +123,7 @@ def stereo_pole(ax, strike, dip=None, label=None, **kwargs):
     Plot poles to planes on a stereonet. Accepts separate arrays
     or a packed (N, 2) array.
     """
-    strike = np.asarray(strike, dtype=float)
-    if dip is None:
-        if strike.ndim == 0:
-            raise ValueError("dip required for scalar strike.")
-        packed = np.atleast_2d(strike)
-        strike, dip = packed[:, 0], packed[:, 1]
-    else:
-        dip = np.asarray(dip, dtype=float)
-        strike = np.atleast_1d(strike)
-        dip = np.atleast_1d(dip)
+    strike, dip = _unpack_args(strike, dip, ("strike", "dip"))
     ax.pole(strike, dip, label=label, **kwargs)
 
 
@@ -134,21 +132,9 @@ def stereo_plane(ax, strike, dip=None, label=None, **kwargs):
     Plot great circles on a stereonet. Accepts separate arrays or
     a packed (N, 2) array.
     """
-    strike = np.asarray(strike, dtype=float)
-    if dip is None:
-        if strike.ndim == 0:
-            raise ValueError("dip required for scalar strike.")
-        packed = np.atleast_2d(strike)
-        strike, dip = packed[:, 0], packed[:, 1]
-    else:
-        dip = np.asarray(dip, dtype=float)
-        strike = np.atleast_1d(strike)
-        dip = np.atleast_1d(dip)
+    strike, dip = _unpack_args(strike, dip, ("strike", "dip"))
     for n in range(len(strike)):
-        ax.plane(
-            strike[n], dip[n],
-            label=label if n == 0 else None, **kwargs,
-        )
+        ax.plane(strike[n], dip[n], label=label if n == 0 else None, **kwargs)
 
 
 def stereo_arrow(
@@ -182,12 +168,7 @@ def stereo_contour(
     Plot kernel density contour lines of line elements on a stereonet.
     Accepts separate arrays or a packed (N, 2) array.
     """
-    plunge = np.asarray(plunge, dtype=float)
-    if azimuth is None:
-        packed = np.atleast_2d(plunge)
-        plunge, azimuth = packed[:, 0], packed[:, 1]
-    else:
-        azimuth = np.asarray(azimuth, dtype=float)
+    plunge, azimuth = _unpack_args(plunge, azimuth, ("plunge", "azimuth"))
     ax.density_contour(
         plunge, azimuth, measurement="lines", colors=color,
         levels=levels, sigma=sigma, linewidths=linewidth, **kwargs,

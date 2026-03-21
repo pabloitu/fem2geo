@@ -120,9 +120,10 @@ def run(cfg: dict, job_dir: Path) -> None:
 
         log.info(f"Processing results...")
         if cell_show:
-            plunge1, azimuth1 = line_enu2sphe(model.dir_s1)  # ENU to Spherical coords
-            plunge2, azimuth2 = line_enu2sphe(model.dir_s2)
-            plunge3, azimuth3 = line_enu2sphe(model.dir_s3)
+            # ENU to Spherical coords
+            plunge1, azimuth1 = line_enu2sphe(model.dir_s1) # most compressive eigvector
+            plunge2, azimuth2 = line_enu2sphe(model.dir_s2) # intermediate eigvector
+            plunge3, azimuth3 = line_enu2sphe(model.dir_s3) # least comp. eigvector
 
             cpc = cell_plot_config.update(color=color)  # Update by model's color
 
@@ -136,12 +137,12 @@ def run(cfg: dict, job_dir: Path) -> None:
                 stereo_line(ax, plunge3, azimuth3, **cpc.update(marker="v").kwargs())
 
         if avg_show:
-            _, vec = model.avg_principal()  # get eigenvectors of averaged tensor
+            _, vec = model.avg_principals()  # get eigenvectors of averaged tensor
 
             label = name if len(models) > 1 else None
-            plunge1, azimuth1 = line_enu2sphe(vec[:, 0])
-            plunge2, azimuth2 = line_enu2sphe(vec[:, 1])
-            plunge3, azimuth3 = line_enu2sphe(vec[:, 2])
+            plunge1, azimuth1 = line_enu2sphe(vec[:, 0])  # most compressive eigvector
+            plunge2, azimuth2 = line_enu2sphe(vec[:, 1])  # intermediate eigvector
+            plunge3, azimuth3 = line_enu2sphe(vec[:, 2])  # least comp. eigvector
 
             apc = avg_plot_config.update(color=color)
             stereo_line(

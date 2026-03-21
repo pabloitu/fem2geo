@@ -222,6 +222,7 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell-level model directions (spread)
     if show_cell:
+        # todo: wtf here
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
         p3, a3 = line_enu2sphe(sub.dir_s3)

@@ -128,6 +128,38 @@ class TestUnpackComponents(unittest.TestCase):
             tm.unpack_components(arrays), tm.unpack_voigt6(packed), atol=1e-14)
 
 
+class TestEigenFunctions(unittest.TestCase):
+
+    def setUp(self):
+        T = np.array([[3, .2, -.1], [.2, 2, .3], [-.1, .3, 1.0]])
+        self.tensors = np.stack([T, 2 * T, -T])  # shape (3, 3, 3)
+
+    def test_eigenvalues_shape_and_sorted(self):
+        vals = tm.eigenvalues(self.tensors)
+        self.assertEqual(vals.shape, (3, 3))
+        self.assertTrue(np.all(vals[:, 0] <= vals[:, 1]))
+        self.assertTrue(np.all(vals[:, 1] <= vals[:, 2]))
+
+    def test_eigenvectors_shape_and_orthonormal(self):
+        vecs = tm.eigenvectors(self.tensors)
+        self.assertEqual(vecs.shape, (3, 3, 3))
+        for i in range(3):
+            np.testing.assert_allclose(vecs[i].T @ vecs[i], np.eye(3), atol=1e-12)
+
+    def test_eigenvalues_consistent_with_numpy(self):
+        vals = tm.eigenvalues(self.tensors)
+        for i in range(3):
+            expected = np.sort(np.linalg.eigvalsh(self.tensors[i]))
+            np.testing.assert_allclose(vals[i], expected, atol=1e-12)
+
+    def test_eigenvectors_reconstruct_tensor(self):
+        vecs = tm.eigenvectors(self.tensors)
+        vals = tm.eigenvalues(self.tensors)
+        for i in range(3):
+            T_reconstructed = (vecs[i] * vals[i]) @ vecs[i].T
+            np.testing.assert_allclose(T_reconstructed, self.tensors[i], atol=1e-12)
+
+
 class TestKostrov(unittest.TestCase):
 
     def test_sinistral_vertical(self):

@@ -145,38 +145,43 @@ class TestEigen(unittest.TestCase):
         self.m = _model_comp()
 
     def test_shapes_and_ordering(self):
-        vals = self.m.eigenvalues()
+        vals = self.m.eigenvalues("stress")
         self.assertEqual(vals.shape, (_N, 3))
         self.assertTrue(np.all(vals[:, 0] <= vals[:, 1]))
         self.assertTrue(np.all(vals[:, 1] <= vals[:, 2]))
 
     def test_orthonormal_eigenvectors(self):
-        vecs = self.m.eigenvectors()
+        vecs = self.m.eigenvectors("stress")
         for i in range(_N):
             np.testing.assert_allclose(
                 vecs[i].T @ vecs[i], np.eye(3), atol=1e-12)
 
     def test_eigenvalues_match_val_properties(self):
-        vals = self.m.eigenvalues()
+        vals = self.m.eigenvalues("stress")
         np.testing.assert_allclose(self.m.val_s1, vals[:, 0], atol=1e-12)
         np.testing.assert_allclose(self.m.val_s3, vals[:, 2], atol=1e-12)
+
+    def test_eigenvalues_strain(self):
+        # strain is assembled via TensorField — needs schema with strain tensor
+        # just verify the call dispatches without error on stress_dev
+        vals = self.m.eigenvalues("stress_dev")
+        self.assertEqual(vals.shape, (_N, 3))
 
 
 class TestAverages(unittest.TestCase):
 
     def test_avg_principal_sorted_and_orthonormal(self):
         m = _model_comp()
-        val, vec = m.avg_principal()
+        val, vec = m.avg_principals()
         self.assertEqual(val.shape, (3,))
         self.assertTrue(np.all(val[:-1] <= val[1:]))
         np.testing.assert_allclose(vec.T @ vec, np.eye(3), atol=1e-10)
 
     def test_avg_principal_accepts_name(self):
         m = _model_comp()
-        val, vec = m.avg_principal("stress")
+        val, vec = m.avg_principals("stress")
         self.assertEqual(val.shape, (3,))
-        # stress_dev should also work
-        val_d, vec_d = m.avg_principal("stress_dev")
+        val_d, vec_d = m.avg_principals("stress_dev")
         self.assertEqual(val_d.shape, (3,))
 
     def test_avg_tensor_stress(self):
@@ -241,11 +246,11 @@ class TestExtraction(unittest.TestCase):
 
     def test_large_radius_selects_all(self):
         self.m.extract_sphere([.5, .5, -1.5], 100)
-        ids = self.m._grid.extract_cells.call_args[0][0]
+        ids = self.m.grid.extract_cells.call_args[0][0]
         np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
 
     def test_empty_mask_no_crash(self):
-        result = self.m._extract(np.zeros(4, dtype=bool))
+        result = self.m._extract_cells(np.zeros(4, dtype=bool))
         self.assertIsNotNone(result)
 
     def test_missing_field_raises(self):
