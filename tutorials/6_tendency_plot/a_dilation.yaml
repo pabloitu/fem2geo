@@ -1,4 +1,4 @@
-job: tendency_plot
+job: tendency
 schema: adeli
 
 model: ../data/cavity_model.vtk
@@ -10,3 +10,6 @@ zone:
 
 plot:
   tendency: dilation
+
+output:
+  dir: dilation/

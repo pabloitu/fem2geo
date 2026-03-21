@@ -1,5 +1,5 @@
 """
-Job: fracture_analysis
+Job: fracture
 ======================
 Compares fracture (joint, vein, dyke) orientation measurements with the stress
 state predicted by a FEM model at a given extraction zone. Plots fracture poles
@@ -15,7 +15,7 @@ circle/square/triangle markers.
 
 Config reference
 ----------------
-job: fracture_analysis
+job: fracture
 schema: adeli                       # built-in schema name (default: adeli)
 units:                              # optional category-level unit overrides
   pressure: Pa
@@ -204,7 +204,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(plot.get("title", "Model vs Fracture Data"), y=1.08)
     fig.savefig(
-        out_dir / out.get("figure", "fracture_analysis.png"),
+        out_dir / out.get("figure", "fracture.png"),
         dpi=plot.get("dpi", 200),
         bbox_inches="tight",
     )

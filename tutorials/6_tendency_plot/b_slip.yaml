@@ -1,4 +1,4 @@
-job: tendency_plot
+job: tendency
 schema: adeli
 
 model: ../data/cavity_model.vtk
@@ -13,4 +13,4 @@ plot:
   title: "Slip tendency"
 
 output:
-  dir: results/
+  dir: slip/

@@ -1,4 +1,4 @@
-job: fracture_analysis
+job: fracture
 schema: adeli
 
 model: ../data/model_a.vtu

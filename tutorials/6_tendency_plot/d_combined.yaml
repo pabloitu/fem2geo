@@ -1,4 +1,4 @@
-job: tendency_plot
+job: tendency
 schema: adeli
 units:
   pressure: MPa
@@ -10,6 +10,10 @@ zone:
   center: [24.75, 28.5, -7.3]
   radius: 1.0
 
+data:
+  Set A: ../data/fractures.csv
+  Set B: ../data/fractures_b.csv
+
 plot:
   tendency: combined
   title: "Combined reactivation tendency"
@@ -20,16 +24,11 @@ plot:
   avg_directions:
     show: true
     color: "black"
-    markersize: 10
-    markeredgecolor: "k"
-  cell_directions:
-    show: true
-    style: contour
-    color: "grey"
-    levels: 5
-    sigma: 2.0
-    linewidth: 0.8
+    markersize: 7
+  data:
+    markersize: 6
+    alpha: 0.8
 
 output:
-  dir: results/
-  save_vtu: true
+  dir: combined/
+  vtu: extract.vtu

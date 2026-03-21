@@ -1,5 +1,5 @@
 """
-Job: tendency_plot
+Job: tendency
 ==================
 Plots slip, dilation, combined, or paired tendency fields on a stereonet
 for one model at one extraction zone. Average stress principal directions
@@ -15,7 +15,7 @@ Tendency types:
 
 Config reference
 ----------------
-job: tendency_plot
+job: tendency
 schema: adeli               # built-in schema name (default: adeli)
 units:                      # optional category-level unit overrides
   pressure: Pa
@@ -28,9 +28,13 @@ zone:
   radius: r                 # sphere only
   # dim: [dx, dy, dz]       # box only
 
+data:                               # optional fracture datasets overlaid as poles
+  set_a: path/to/fractures_a.csv
+  set_b: path/to/fractures_b.csv
+
 plot:
   title: ""                 # optional, auto-generated if empty
-  figsize: [16, 7]          # default for both; [8, 8] for single
+  figsize: [16, 8]          # default for both; [8, 8] for single
   dpi: 200
   tendency: both            # slip | dilation | combined | both
   n_strikes: 180            # stereonet grid resolution
@@ -45,10 +49,13 @@ plot:
     color: "k"
     markersize: 3
     alpha: 0.4
+  data:                     # shared style for fracture pole datasets
+    markersize: 5
+    alpha: 0.7
 
 output:
   dir: results/             # optional, defaults to config file directory
-  save_vtu: false           # save extracted sub-model for Paraview
+  vtu: extract.vtu          # optional, saves extracted sub-model
 
 Example
 -------
@@ -61,31 +68,36 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fem2geo import runner
+from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, stereo_field, stereo_line, stereo_contour
+from fem2geo.plots import PlotConfig, MODEL_COLORS, stereo_field, stereo_line, stereo_contour, stereo_pole
 from fem2geo.runner import parse_config
 from fem2geo.utils.tensor import slip_tendency, dilation_tendency, combined_tendency
 from fem2geo.utils.transform import line_enu2sphe, grid_nodes, grid_centers
 
 log = logging.getLogger("fem2geoLogger")
 
+AVG_STYLE     = PlotConfig(color="white", markersize=8, markeredgecolor="k")
+CELL_STYLE    = PlotConfig(color="k", markersize=3, alpha=0.4)
+CONTOUR_STYLE = PlotConfig(color="k", levels=4, sigma=2.0, linewidth=1.0)
+DATA_STYLE    = PlotConfig(markersize=5, alpha=0.7, marker="+")
+
 _VALID_TENDENCIES = ("slip", "dilation", "combined", "both")
 
 _TENDENCY_FNS = {
-    "slip": slip_tendency,
+    "slip":     slip_tendency,
     "dilation": dilation_tendency,
     "combined": combined_tendency,
 }
 
 _CBAR_LABELS = {
-    "slip": r"Slip tendency $T'_s$",
+    "slip":     r"Slip tendency $T'_s$",
     "dilation": r"Dilation tendency $T_d$",
     "combined": r"Combined tendency $T'_s + T_d$",
 }
 
 _TITLES = {
-    "slip": "Slip tendency",
+    "slip":     "Slip tendency",
     "dilation": "Dilation tendency",
     "combined": "Combined tendency",
 }
@@ -97,8 +109,8 @@ def _compute_field(sigma, kind, n_strikes, n_dips):
     """
     Discretize the stereonet and compute a tendency field.
 
-    Returns the node grids (for pcolormesh edges) and the cell-center
-    values ready for :func:`~fem2geo.plots.stereo_field`.
+    Returns node grids (for pcolormesh edges) and cell-center values
+    ready for :func:`~fem2geo.plots.stereo_field`.
     """
     mesh_s, mesh_d = grid_nodes(n_strikes, n_dips)
     cs, cd = grid_centers(mesh_s, mesh_d)
@@ -108,119 +120,99 @@ def _compute_field(sigma, kind, n_strikes, n_dips):
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    # config
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
-
-    tendency = plot.get("tendency", "both")
-    dpi = plot.get("dpi", 200)
-    n_strikes = plot.get("n_strikes", 180)
-    n_dips = plot.get("n_dips", 45)
     out_dir = Path(out.get("dir", job_dir))
-    save_vtu = out.get("save_vtu", False)
 
-    avg_cfg = plot.get("avg_directions", {})
-    cell_cfg = plot.get("cell_directions", {})
-    show_avg = avg_cfg.get("show", True)
-    show_cell = cell_cfg.get("show", False)
+    tendency  = plot.get("tendency", "both")
+    n_strikes = plot.get("n_strikes", 180)
+    n_dips    = plot.get("n_dips", 45)
+
+    avg_cfg    = plot.get("avg_directions", {})
+    show_avg   = avg_cfg.get("show", True)
+    avg_style  = AVG_STYLE.update(avg_cfg)
+
+    cell_cfg   = plot.get("cell_directions", {})
+    show_cell  = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-
-    avg_style = PlotConfig.avg(color="white").update(
-        avg_cfg if isinstance(avg_cfg, dict) else {})
-    cell_pc = (PlotConfig.density() if cell_style == "contour"
-               else PlotConfig.cell()).update(
-        cell_cfg if isinstance(cell_cfg, dict) else {})
+    cell_pc    = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(cell_cfg)
 
     if tendency not in _VALID_TENDENCIES:
-        raise ValueError(
-            f"plot.tendency must be one of {_VALID_TENDENCIES}, "
-            f"got '{tendency}'.")
-    if "model" not in cfg:
-        raise ValueError("tendency_plot requires a 'model' key.")
+        raise ValueError(f"plot.tendency must be one of {_VALID_TENDENCIES}, got '{tendency}'.")
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # load and extract
     path = (job_dir / cfg["model"]).resolve()
     log.info(f"Loading model: {path}")
     model = Model.from_file(path, schema)
-
     sub = model.extract(zone)
-
     log.info(f"  {sub.n_cells} cells in zone")
 
-    if save_vtu:
-        sub.save(out_dir / "extract.vtu")
+    if "vtu" in out:
+        sub.save(out_dir / out.get("vtu", "extract.vtu"))
 
-    # average stress and principal directions
     avg_stress = sub.avg_tensor("stress")
-    val, vec = np.linalg.eigh(avg_stress)
-    order = np.argsort(val)
-    val, vec = val[order], vec[:, order]
+    val, vec = sub.avg_principals("stress")
     phi = float((val[1] - val[2]) / (val[0] - val[2]))
 
-    # figure layout
     is_double = tendency == "both"
-    if is_double:
-        figsize = plot.get("figsize", [16, 7])
-    else:
-        figsize = plot.get("figsize", [8, 8])
-
+    figsize = plot.get("figsize", [16, 8] if is_double else [8, 8])
     fig = plt.figure(figsize=figsize)
 
     if is_double:
-        ax_slip = fig.add_subplot(121, projection="stereonet")
-        ax_dil = fig.add_subplot(122, projection="stereonet")
-        panels = {"slip": ax_slip, "dilation": ax_dil}
+        panels = {
+            "slip":     fig.add_subplot(121, projection="stereonet"),
+            "dilation": fig.add_subplot(122, projection="stereonet"),
+        }
     else:
         panels = {tendency: fig.add_subplot(111, projection="stereonet")}
 
-    # tendency fields
-    for kind, ax in panels.items():
+    for ax in panels.values():
         ax.grid(True)
-        mesh_s, mesh_d, vals = _compute_field(
-            avg_stress, kind, n_strikes, n_dips)
-        stereo_field(ax, mesh_s, mesh_d, vals,
-                     vmin=0.0, vmax=_VMAX[kind],
-                     cbar_label=_CBAR_LABELS[kind])
+        ax.set_azimuth_ticks([])
 
-    # cell directions (spread)
+    for kind, ax in panels.items():
+        mesh_s, mesh_d, vals = _compute_field(avg_stress, kind, n_strikes, n_dips)
+        stereo_field(ax, mesh_s, mesh_d, vals,
+                     vmin=0.0, vmax=_VMAX[kind], cbar_label=_CBAR_LABELS[kind])
+
     if show_cell:
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
         p3, a3 = line_enu2sphe(sub.dir_s3)
-        fn = stereo_contour if cell_style == "contour" else stereo_line
-
         for ax in panels.values():
-            fn(ax, p1, a1, **cell_pc.as_kwargs(cell_style, "o"))
-            fn(ax, p2, a2, **cell_pc.as_kwargs(cell_style, "s"))
-            fn(ax, p3, a3, **cell_pc.as_kwargs(cell_style, "v"))
+            if cell_style == "contour":
+                kw = cell_pc.kwargs()
+                stereo_contour(ax, p1, a1, **kw)
+                stereo_contour(ax, p2, a2, **kw)
+                stereo_contour(ax, p3, a3, **kw)
+            else:
+                stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
+                stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
+                stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
 
-    # average directions
     if show_avg:
         p1, a1 = line_enu2sphe(vec[:, 0])
         p2, a2 = line_enu2sphe(vec[:, 1])
         p3, a3 = line_enu2sphe(vec[:, 2])
-
         for ax in panels.values():
-            stereo_line(ax, p1, a1, label=r"$\sigma_1$",
-                        **avg_style.scatter_kwargs("o"))
-            stereo_line(ax, p2, a2, label=r"$\sigma_2$",
-                        **avg_style.scatter_kwargs("s"))
-            stereo_line(ax, p3, a3, label=r"$\sigma_3$",
-                        **avg_style.scatter_kwargs("v"))
+            stereo_line(ax, p1, a1, label=r"$\sigma_1$", **avg_style.update(marker="o").kwargs())
+            stereo_line(ax, p2, a2, label=r"$\sigma_2$", **avg_style.update(marker="s").kwargs())
+            stereo_line(ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs())
 
-    # titles and legends
-    suffix = (f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$,"
-              f" $\\phi={phi:.2f}$")
+    if cfg.get("data"):
+        data_style  = DATA_STYLE.update(plot.get("data", {}))
+        data_colors = MODEL_COLORS[1: len(cfg["data"]) + 1]
+        for color, (name, path) in zip(data_colors, cfg["data"].items()):
+            fd = load_structural_csv((job_dir / path).resolve())
+            for ax in panels.values():
+                stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1],
+                            label=name, **data_style.update(color=color).kwargs())
+
+    suffix = f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$, $\\phi={phi:.2f}$"
     custom_title = plot.get("title", "")
-
     for kind, ax in panels.items():
-        t = custom_title if custom_title else _TITLES[kind] + suffix
-        ax.set_title(t, y=1.05)
+        ax.set_title(custom_title if custom_title else _TITLES[kind] + suffix, y=1.05)
         ax.legend(fontsize=7)
 
-    # save
-    out_path = out_dir / "tendency_plot.png"
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    fig.savefig(out_dir / out.get("figure", "tendency.png"),
+                dpi=plot.get("dpi", 200), bbox_inches="tight")
     plt.close(fig)
-    log.info(f"Saved: {out_path}")
+    log.info(f"Saved results: {out_dir}")

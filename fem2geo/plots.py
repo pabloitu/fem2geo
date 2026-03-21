@@ -51,8 +51,6 @@ class PlotConfig:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-# stereonet plotting functions
-
 def stereo_field(
     ax, mesh_strikes, mesh_dips, values,
     cmap="RdYlBu_r", vmin=None, vmax=None,
@@ -60,7 +58,6 @@ def stereo_field(
 ):
     """
     Draw a pre-computed scalar field on a stereonet as a pcolormesh.
-    The caller computes the values (tendency, susceptibility, etc.).
 
     Parameters
     ----------
@@ -84,24 +81,14 @@ def stereo_field(
         The pcolormesh mappable.
     """
     lon, lat = mplstereonet.pole(mesh_strikes, mesh_dips)
-    m = ax.pcolormesh(
-        lon, lat, values, cmap=cmap, shading="auto",
-        vmin=vmin, vmax=vmax,
-    )
+    m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
     defaults = {"shrink": 0.6, "pad": 0.08}
     defaults.update(cbar_kwargs or {})
-    fig = ax.get_figure()
-    fig.colorbar(m, ax=ax, label=cbar_label or "", **defaults)
+    ax.get_figure().colorbar(m, ax=ax, label=cbar_label or "", **defaults)
     return m
 
 
 def _unpack_args(first, second, kind):
-    """
-    Normalize separate or packed array inputs for stereonet functions.
-
-    Accepts either two separate arrays (plunge+azimuth or strike+dip)
-    or a single packed (N, 2) array as ``first``. Returns two 1-D arrays.
-    """
     first = np.asarray(first, dtype=float)
     if second is None:
         if first.ndim == 0:
