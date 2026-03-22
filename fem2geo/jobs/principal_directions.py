@@ -4,8 +4,7 @@ Job: principal_directions
 Probes a model at a given location by plotting principal stress directions
 on a stereonet. By default, shows the average stress directions only. Cell
 directions can be enabled to visualise the spread around the average.
-Multiple models can be compared at the same zone — each gets a distinct
-colour.
+
 
 Config reference
 ----------------
@@ -64,18 +63,15 @@ from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
-# default styles
+# Default Plot Properties
 AVG_STYLE = PlotConfig(color="red", markersize=8, markeredgecolor="k")
 CELL_STYLE = PlotConfig(color="red", markersize=3, markeredgecolor="none", alpha=0.4)
 CONTOUR_STYLE = PlotConfig(color="red", levels=4, sigma=2.0, linewidth=1.0)
 
 
-# main job
 def run(cfg: dict, job_dir: Path) -> None:
 
-    # parse configuration file
-    # schema: map file fields to internal (see fem2geo/internal/schemas)
-    # zone, plot, data and out: groups in config file
+    # read and parse different config segments
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
     out_dir = out["dir"]
 
@@ -83,14 +79,14 @@ def run(cfg: dict, job_dir: Path) -> None:
     models = cfg.get("models", {"model": cfg.get("model")})
 
     # plot options
-    avg_cfg = plot.get("avg_directions", {})    # Config for model average eigenvectors
-    avg_show = avg_cfg.get("show", True)
-    avg_plot_config = AVG_STYLE.update(avg_cfg)
+    avg_cfg = plot.get("avg_directions", {})    # Config for model average
+    avg_show = avg_cfg.get("show", True)        # Flag to show model average
+    avg_pc = AVG_STYLE.update(avg_cfg)          # Plot config, default at top of module
 
-    cell_cfg = plot.get("cell_directions", {}) # Config for each cell eigenvectors
-    cell_show = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")  # plotted as scatter or contour
-    cell_plot_config = CONTOUR_STYLE.update(cell_cfg) if cell_style == "contour" \
+    cell_cfg = plot.get("cell_directions", {})      # Config for per-cell plot
+    cell_show = cell_cfg.get("show", False)         # Flag to show per-cell
+    cell_style = cell_cfg.get("style", "scatter")   # scatter or contour
+    cell_pc = CONTOUR_STYLE.update(cell_cfg) if cell_style == "contour" \
         else CELL_STYLE.update(cell_cfg)
 
     # figure
@@ -103,51 +99,50 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D([0], [0], color="k", lw=0, marker="v", label=r"$\sigma_3$"),
     ]
 
-    # per-model loop
-    colors = MODEL_COLORS[: len(models)]
+    colors = MODEL_COLORS[: len(models)]  # per model color
+    # Model loop
     for color, name in zip(colors, models):
-        path = (job_dir / models[name]).resolve() # get model's filepath
+        path = (job_dir / models[name]).resolve()
         log.info(f"Loading {name}: {path}")
 
-        model = Model.from_file(path, schema)   # Load model
-        model = model.extract(zone)             # Select zone to probe
+        model = Model.from_file(path, schema)       # Load model
+        model = model.extract(zone)                 # Extract region of interest
 
-        log.info(f"Processing results...")
+        log.info("Processing results...")
         if cell_show:
-            # ENU to Spherical coords
-            plunge1, azimuth1 = line_enu2sphe(model.dir_s1) # most compressive eigvector
-            plunge2, azimuth2 = line_enu2sphe(model.dir_s2) # intermediate eigvector
-            plunge3, azimuth3 = line_enu2sphe(model.dir_s3) # least comp. eigvector
 
-            cpc = cell_plot_config.update(color=color)  # Update by model's color
+            # get plunge and azimuth for all principal axes
+            p1, a1 = line_enu2sphe(model.dir_s1)
+            p2, a2 = line_enu2sphe(model.dir_s2)
+            p3, a3 = line_enu2sphe(model.dir_s3)
+
+            # update per-model color
+            cpc = cell_pc.update(color=color)
 
             if cell_style == "contour":
-                stereo_contour(ax, plunge1, azimuth1, **cpc.kwargs())
-                stereo_contour(ax, plunge2, azimuth2, **cpc.kwargs())
-                stereo_contour(ax, plunge3, azimuth3, **cpc.kwargs())
+                # plot with the cpc keyword arguments (expanded with **)
+                stereo_contour(ax, p1, a1, **cpc.kwargs())
+                stereo_contour(ax, p2, a2, **cpc.kwargs())
+                stereo_contour(ax, p3, a3, **cpc.kwargs())
             else:
-                stereo_line(ax, plunge1, azimuth1, **cpc.update(marker="o").kwargs())
-                stereo_line(ax, plunge2, azimuth2, **cpc.update(marker="s").kwargs())
-                stereo_line(ax, plunge3, azimuth3, **cpc.update(marker="v").kwargs())
+                stereo_line(ax, p1, a1, **cpc.update(marker="o").kwargs())
+                stereo_line(ax, p2, a2, **cpc.update(marker="s").kwargs())
+                stereo_line(ax, p3, a3, **cpc.update(marker="v").kwargs())
 
         if avg_show:
-            _, vec = model.avg_principals()  # get eigenvectors of averaged tensor
+
+            # Get principal directions from the average of the model extraction
+            _, vec = model.avg_principals()
 
             label = name if len(models) > 1 else None
-            plunge1, azimuth1 = line_enu2sphe(vec[:, 0])  # most compressive eigvector
-            plunge2, azimuth2 = line_enu2sphe(vec[:, 1])  # intermediate eigvector
-            plunge3, azimuth3 = line_enu2sphe(vec[:, 2])  # least comp. eigvector
+            p1, a1 = line_enu2sphe(vec[:, 0])
+            p2, a2 = line_enu2sphe(vec[:, 1])
+            p3, a3 = line_enu2sphe(vec[:, 2])
 
-            apc = avg_plot_config.update(color=color)
-            stereo_line(
-                ax,
-                plunge1,
-                azimuth1,
-                label=label,
-                **apc.update(marker="o").kwargs(),
-            )
-            stereo_line(ax, plunge2, azimuth2, **apc.update(marker="s").kwargs())
-            stereo_line(ax, plunge3, azimuth3, **apc.update(marker="v").kwargs())
+            apc = avg_pc.update(color=color)
+            stereo_line(ax, p1, a1, label=label, **apc.update(marker="o").kwargs())
+            stereo_line(ax, p2, a2, **apc.update(marker="s").kwargs())
+            stereo_line(ax, p3, a3, **apc.update(marker="v").kwargs())
 
         if len(models) > 1:
             legend.append(Patch(facecolor=color, edgecolor="k", label=name))

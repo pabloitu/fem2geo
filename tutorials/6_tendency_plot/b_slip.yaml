@@ -11,6 +11,7 @@ zone:
 plot:
   tendency: slip
   title: "Slip tendency"
+  stress_values: True
 
 output:
   dir: slip/
