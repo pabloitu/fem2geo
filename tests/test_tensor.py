@@ -7,17 +7,6 @@ import fem2geo.utils.tensor as tm
 
 class TestRotation(unittest.TestCase):
 
-    def test_rotation_matrices_are_orthogonal(self):
-        for ax in (1, 2, 3):
-            for ang in (0, 17, 90, -45):
-                R = tm.rot_matrix(ang, ax)
-                np.testing.assert_allclose(R.T @ R, np.eye(3), atol=1e-12)
-                self.assertAlmostEqual(np.linalg.det(R), 1.0, places=10)
-
-    def test_bad_axis(self):
-        with self.assertRaises(ValueError):
-            tm.rot_matrix(10, 4)
-
     def test_tensor_rotation_preserves_invariants(self):
         T = np.array([[3, .2, -.1], [.2, 2, .3], [-.1, .3, 1.0]])
         ev0 = np.sort(np.linalg.eigvalsh(T))

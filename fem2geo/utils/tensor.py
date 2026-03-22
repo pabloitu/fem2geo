@@ -8,9 +8,7 @@ __all__ = [
     "unpack_components",
     "eigenvalues",
     "eigenvectors",
-    "rot_matrix",
     "rot_tensor",
-    "normals_from_planes",
     "ensure_normals",
     "resolved_shear_enu",
     "slip_tendency",
@@ -109,46 +107,6 @@ def eigenvectors(tensors):
     return vecs
 
 
-def rot_matrix(angle, axis):
-    """
-    Create a 3D right-handed rotation matrix.
-
-    Parameters
-    ----------
-    angle : float
-        Rotation angle in degrees.
-    axis : int
-        Axis index: 1=x(E), 2=y(N), 3=z(U).
-
-    Returns
-    -------
-    numpy.ndarray, shape (3, 3)
-        Rotation matrix.
-
-    Raises
-    ------
-    ValueError
-        If axis is not one of {1, 2, 3}.
-    """
-    a = np.deg2rad(angle)
-    c, s = np.cos(a), np.sin(a)
-
-    if axis == 3:
-        return np.array([[c, -s, 0.0],
-                         [s,  c, 0.0],
-                         [0.0, 0.0, 1.0]], dtype=float)
-    if axis == 2:
-        return np.array([[c, 0.0,  s],
-                         [0.0, 1.0, 0.0],
-                         [-s, 0.0,  c]], dtype=float)
-    if axis == 1:
-        return np.array([[1.0, 0.0, 0.0],
-                         [0.0,  c, -s],
-                         [0.0,  s,  c]], dtype=float)
-
-    raise ValueError("axis must be one of {1, 2, 3}.")
-
-
 def rot_tensor(tensor, angle, axis):
     """
     Rotate a 2nd-order tensor by a given axis and angle.
@@ -170,50 +128,30 @@ def rot_tensor(tensor, angle, axis):
     Raises
     ------
     ValueError
-        If tensor is not shape (3, 3).
+        If tensor is not shape (3, 3) or axis is not in {1, 2, 3}.
     """
     T = np.asarray(tensor, dtype=float)
     if T.shape != (3, 3):
         raise ValueError("tensor must be shape (3, 3).")
 
-    R = rot_matrix(angle, axis)
+    a = np.deg2rad(angle)
+    c, s = np.cos(a), np.sin(a)
+
+    if axis == 3:
+        R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    elif axis == 2:
+        R = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+    elif axis == 1:
+        R = np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]])
+    else:
+        raise ValueError("axis must be one of {1, 2, 3}.")
+
     return R @ T @ R.T
-
-
-def normals_from_planes(planes):
-    """
-    Compute ENU unit normals from strike/dip planes.
-
-    Parameters
-    ----------
-    planes : array-like, shape (2,) or (N, 2)
-        Plane(s) [strike, dip] in degrees.
-
-    Returns
-    -------
-    numpy.ndarray, shape (N, 3)
-        Unit normals in ENU coordinates [E, N, U].
-
-    Raises
-    ------
-    ValueError
-        If input has invalid shape.
-    """
-    planes = np.asarray(planes, dtype=float)
-    if planes.ndim == 1:
-        if planes.shape != (2,):
-            raise ValueError("plane must be length-2 [strike, dip].")
-        return tr.plane_sphe2enu(planes[0], planes[1])[None, :]
-    if planes.ndim == 2:
-        if planes.shape[1] != 2:
-            raise ValueError("planes must have shape (N, 2).")
-        return tr.plane_sphe2enu(planes[:, 0], planes[:, 1])
-    raise ValueError("planes must be shape (2,) or (N,2).")
 
 
 def ensure_normals(normals):
     """
-    Normalize ENU normals.
+    Validate and normalize ENU normal vectors.
 
     Parameters
     ----------
@@ -223,7 +161,7 @@ def ensure_normals(normals):
     Returns
     -------
     numpy.ndarray, shape (N, 3)
-        Unit normal vector(s).
+        Unit normal vector(s), always 2-D.
 
     Raises
     ------
@@ -268,21 +206,22 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     tau : float
         Shear traction magnitude (always non-negative).
     tau_hat : numpy.ndarray, shape (3,)
-        Directed unit shear traction vector in ENU. This is the true physical
-        direction of the resolved shear stress — no sign canonicalization is
-        applied, so the vector carries kinematic sense.
+        Directed unit shear traction vector in ENU. No sign
+        canonicalization is applied, so the vector carries
+        kinematic sense.
 
     Raises
     ------
     ValueError
-        If sigma has invalid shape or both/neither plane and normal are provided.
+        If sigma has invalid shape or both/neither plane and
+        normal are provided.
 
     Notes
     -----
-    The returned ``tau_hat`` is the direction in which the material on the
-    positive-normal side of the plane is being pushed by shear stress. For
-    Wallace-Bott comparison, this can be compared directly with the observed
-    slip vector (e.g. from a signed rake).
+    ``tau_hat`` is the direction in which material on the
+    positive-normal side of the plane is pushed by shear stress.
+    For Wallace-Bott comparison, it can be compared directly with
+    the observed slip vector (e.g. from a signed rake).
     """
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):
@@ -308,14 +247,14 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     return mag, t_s / mag
 
 
-def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
+def slip_tendency(sigma, strikes, dips, eps=1e-12):
     """
     Normalized slip tendency Ts' for one or many planes.
 
-    Computes the ratio |tau| / |sigma_n| and normalizes by the maximum
-    slip tendency achievable in the given stress state, so the result is
-    always in [0, 1]. A value of 1 corresponds to the optimally oriented
-    plane for slip (Morris et al., 1996).
+    Computes |tau| / |sigma_n| normalized by the maximum slip tendency
+    achievable in the given stress state, so the result is always in
+    [0, 1]. A value of 1 corresponds to the optimally oriented plane
+    for slip (Morris et al., 1996).
 
     The maximum slip tendency is found analytically from the three 2D
     Mohr circles defined by pairs of principal stresses.
@@ -324,24 +263,18 @@ def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
     ----------
     sigma : array-like, shape (3, 3)
         Stress tensor in ENU coordinates.
-    planes : array-like, shape (2,) or (N, 2), optional
-        Plane(s) [strike, dip] in degrees.
-    normals : array-like, shape (3,) or (N, 3), optional
-        Plane normal(s) in ENU coordinates.
+    strikes : float or array-like
+        Strike angle(s) in degrees.
+    dips : float or array-like
+        Dip angle(s) in degrees.
     eps : float
         Threshold for treating sigma_n or Ts_max as zero.
 
     Returns
     -------
     numpy.ndarray or float
-        Normalized slip tendency in [0, 1]. Scalar if input is one
-        plane/normal, array otherwise.
-
-    Raises
-    ------
-    ValueError
-        If sigma has invalid shape or both/neither planes and normals
-        are provided.
+        Normalized slip tendency in [0, 1]. Scalar if input is
+        scalar, array otherwise.
 
     References
     ----------
@@ -352,15 +285,11 @@ def slip_tendency(sigma, planes=None, normals=None, eps=1e-12):
     if S.shape != (3, 3):
         raise ValueError("sigma must be shape (3, 3).")
 
-    if (planes is None) == (normals is None):
-        raise ValueError("Provide exactly one of planes or normals.")
+    strikes = np.asarray(strikes, dtype=float)
+    dips = np.asarray(dips, dtype=float)
+    scalar = strikes.ndim == 0 and dips.ndim == 0
 
-    if normals is None:
-        n = normals_from_planes(planes)
-        scalar = np.asarray(planes).ndim == 1
-    else:
-        n = ensure_normals(normals)
-        scalar = np.asarray(normals).ndim == 1
+    n = np.atleast_2d(tr.plane_sphe2enu(strikes, dips))
 
     t = n @ S.T
     sigma_n = np.einsum("ij,ij->i", t, n)
@@ -404,58 +333,51 @@ def _ts_max(sigma, eps=1e-12):
     return ts
 
 
-def dilation_tendency(sigma, planes=None, normals=None, eps=1e-12):
+def dilation_tendency(sigma, strikes, dips, eps=1e-12):
     """
-    Compute dilation tendency Td = (s1 - sigma_n)/(s1 - s3) for one or many planes.
+    Dilation tendency Td = (s1 - sigma_n) / (s1 - s3).
 
     Parameters
     ----------
     sigma : array-like, shape (3, 3)
         Stress tensor in ENU coordinates.
-    planes : array-like, shape (2,) or (N, 2), optional
-        Plane(s) [strike, dip] in degrees.
-    normals : array-like, shape (3,) or (N, 3), optional
-        Plane normal(s) in ENU coordinates.
+    strikes : float or array-like
+        Strike angle(s) in degrees.
+    dips : float or array-like
+        Dip angle(s) in degrees.
     eps : float
-        Threshold for treating (s1 - s3) as zero (near-isotropic stress).
+        Threshold for treating (s1 - s3) as zero (near-isotropic).
 
     Returns
     -------
     numpy.ndarray or float
-        Dilation tendency values. Scalar if input is one plane/normal, array otherwise.
-
-    Raises
-    ------
-    ValueError
-        If sigma has invalid shape or both/neither planes and normals are provided.
+        Dilation tendency values. Scalar if input is scalar,
+        array otherwise.
 
     Notes
     -----
-    Uses eigenvalues of sigma to define s1=min(eigs), s3=max(eigs). For near-isotropic
-    tensors where |s1 - s3| < eps, returns NaNs.
+    s1 = min(eigenvalues), s3 = max(eigenvalues). For near-isotropic
+    tensors where |s1 - s3| < eps, returns NaN.
     """
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):
         raise ValueError("sigma must be shape (3, 3).")
 
-    if (planes is None) == (normals is None):
-        raise ValueError("Provide exactly one of planes or normals.")
-
-    if normals is None:
-        n = normals_from_planes(planes)
-        scalar = np.asarray(planes).ndim == 1
-    else:
-        n = ensure_normals(normals)
-        scalar = np.asarray(normals).ndim == 1
+    strikes = np.asarray(strikes, dtype=float)
+    dips = np.asarray(dips, dtype=float)
+    scalar = strikes.ndim == 0 and dips.ndim == 0
 
     val = np.linalg.eigvalsh(S)
     s1 = float(np.min(val))
     s3 = float(np.max(val))
 
-    denom = (s1 - s3)
+    denom = s1 - s3
     if abs(denom) < eps:
-        out = np.full((n.shape[0],), np.nan, dtype=float)
+        n = np.atleast_2d(tr.plane_sphe2enu(strikes, dips))
+        out = np.full(n.shape[0], np.nan, dtype=float)
         return float(out[0]) if scalar else out
+
+    n = np.atleast_2d(tr.plane_sphe2enu(strikes, dips))
 
     t = n @ S.T
     sigma_n = np.einsum("ij,ij->i", t, n)
@@ -466,23 +388,23 @@ def dilation_tendency(sigma, planes=None, normals=None, eps=1e-12):
     return float(out[0]) if scalar else out
 
 
-def combined_tendency(sigma, planes=None, normals=None, eps=1e-12):
+def combined_tendency(sigma, strikes, dips, eps=1e-12):
     """
     Combined reactivation tendency: Ts' + Td.
 
     Sums the normalized slip tendency (Morris et al., 1996) and the
     dilation tendency (Ferrill et al., 1999). Both components are in
     [0, 1], so the result ranges from 0 (stable) to 2 (maximum
-    reactivation potential for both slip and dilation).
+    reactivation potential).
 
     Parameters
     ----------
     sigma : array-like, shape (3, 3)
         Stress tensor in ENU coordinates.
-    planes : array-like, shape (2,) or (N, 2), optional
-        Plane(s) [strike, dip] in degrees.
-    normals : array-like, shape (3,) or (N, 3), optional
-        Plane normal(s) in ENU coordinates.
+    strikes : float or array-like
+        Strike angle(s) in degrees.
+    dips : float or array-like
+        Dip angle(s) in degrees.
     eps : float
         Threshold for near-zero denominators.
 
@@ -497,24 +419,22 @@ def combined_tendency(sigma, planes=None, normals=None, eps=1e-12):
     modes, deformation mechanisms, dilation tendency, slip tendency, and
     conduits v. seals. *Geol. Soc. Lond. Spec. Publ.*, 496, 75-98.
     """
-    ts = slip_tendency(sigma, planes=planes, normals=normals, eps=eps)
-    td = dilation_tendency(sigma, planes=planes, normals=normals, eps=eps)
+    ts = slip_tendency(sigma, strikes, dips, eps=eps)
+    td = dilation_tendency(sigma, strikes, dips, eps=eps)
     ts = np.asarray(ts, dtype=float)
     td = np.asarray(td, dtype=float)
     out = ts + td
-    scalar = out.ndim == 0
-    return float(out) if scalar else out
+    return float(out) if out.ndim == 0 else out
 
 
 def kostrov_tensor(strikes, dips, rakes):
     """
-    Compute the Kostrov (1974) summed moment tensor from a fault population.
+    Kostrov (1974) summed moment tensor from a fault population.
 
-    Each fault contributes a symmetric dyad ``½(s⊗n + n⊗s)`` where ``s``
-    is the unit slip vector (directed, from signed rake) and ``n`` is the
-    unit fault plane normal. The sum over all faults gives a symmetric
-    tensor whose eigenvectors are the bulk kinematic axes of the fault
-    population (shortening, intermediate, extension).
+    Each fault contributes a symmetric dyad 1/2(s*n + n*s) where s
+    is the unit slip vector (from signed rake) and n is the fault
+    normal. The sum gives a tensor whose eigenvectors are the bulk
+    kinematic axes (shortening, intermediate, extension).
 
     All faults are weighted equally (unit potency).
 
@@ -546,8 +466,7 @@ def kostrov_tensor(strikes, dips, rakes):
     if normals.ndim == 1:
         normals = normals[None, :]
 
-    # Kostrov sum: ½ Σ (s⊗n + n⊗s)
-    # s⊗n has components s_i * n_j, so s⊗n + n⊗s = s_i*n_j + n_i*s_j
+    # Kostrov sum: 1/2 * sum(s*n + n*s)
     K = np.einsum("ki,kj->ij", slips, normals) + np.einsum("ki,kj->ij", normals, slips)
     K *= 0.5
 

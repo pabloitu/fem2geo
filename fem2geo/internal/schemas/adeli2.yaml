@@ -49,14 +49,14 @@ fields:
   threshold_ratio: { field: "threshold_ratio_(-)" }
   viscosity:       { field: "Eff_viscosity_(Pa.s)", category: viscosity }
 
-  # Fluid and thermal (cell data)
+  # Fluid flow
   darcy_vel: { field: "Darcy_Vel_(m/s)",   category: velocity }
-  heat_flux: { field: "Heat_flux_(mW/m2)", category: heat_flux }
+  fluid_pressure: { field: "fluid_pressure_(Pa)", category: pressure }
 
-  # Kinematics (point data)
+  # Kinematics
   v: { field: "velocity_(m/s)",   category: velocity }
   u: { field: "displacement_(m)", category: distance }
 
-  # Thermal (point data)
+  # Thermal
   temperature:    { field: "temperature_(C)",     category: temperature }
-  fluid_pressure: { field: "fluid_pressure_(Pa)", category: pressure }
+  heat_flux: { field: "Heat_flux_(mW/m2)", category: heat_flux }

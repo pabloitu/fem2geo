@@ -17,10 +17,10 @@ _FAULTS_COLS = {"strike", "dip", "rake"}
 
 def load_structural_csv(path) -> FractureData | FaultData:
     """
-    Load structural geology measurements from a CSV file.
+    Read structural measurements from a CSV file.
 
-    Column detection is case-insensitive. Returns :class:`FractureData`
-    for strike/dip or :class:`FaultData` for strike/dip/rake.
+    Column matching is case-insensitive. Files with strike/dip/rake
+    columns produce FaultData; strike/dip only gives FractureData.
     """
     path = Path(path)
     if not path.exists():
@@ -40,8 +40,7 @@ def load_structural_csv(path) -> FractureData | FaultData:
                 f"Expected: {sorted(_FAULTS_COLS)} or {sorted(_PLANES_COLS)}."
             )
 
-        col_map = {name.strip().lower(): name.strip()
-                   for name in reader.fieldnames}
+        col_map = {name.strip().lower(): name.strip() for name in reader.fieldnames}
         rows = list(reader)
 
     if not rows:
@@ -57,21 +56,17 @@ def load_structural_csv(path) -> FractureData | FaultData:
     else:
         data = FractureData(planes=planes)
 
-    log.info(
-        f"Loaded structural data: {path} ({kind}, {len(rows)} measurements)"
-    )
+    log.info(f"Loaded structural data: {path} ({kind}, {len(rows)} measurements)")
     return data
 
 
 def load_grid(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
     """
-    Load a FEM model and rename arrays to canonical names.
+    Load a FEM result file and rename arrays to canonical names.
 
-    Scalar/vector fields declared in ``schema.fields`` are renamed
-    one-to-one. Tensor arrays declared in ``schema.tensors`` are renamed
-    so that :meth:`Model._assemble_tensor` can find them by canonical key.
-
-    Directional fields (``dir_*``) are normalized to unit vectors.
+    Scalar and vector fields are renamed one-to-one from the schema. Tensor arrays
+    are renamed so they can be reassembled later by canonical key. Directional fields
+    (dir_*) are normalized to unit vectors.
     """
     if isinstance(schema, str):
         schema = ModelSchema.builtin(schema)
