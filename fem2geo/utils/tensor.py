@@ -16,6 +16,7 @@ __all__ = [
     "dilation_tendency",
     "combined_tendency",
     "kostrov_tensor",
+    "axes_misfit",
 ]
 
 # Voigt ordering: [xx, yy, zz, xy, yz, zx] -> (i, j) symmetric tensor
@@ -299,6 +300,46 @@ def resolved_rakes(sigma, strikes, dips, eps=1e-12):
         out[safe] = tr.slip_enu2rake(t_s[safe], strikes[safe], dips[safe])
 
     return out
+
+
+def axes_misfit(vecs_a, vecs_b):
+    """
+    Angular misfit between two sets of principal axes.
+
+    Parameters
+    ----------
+    vecs_a : array-like, shape (3, 3)
+        Eigenvectors as columns (e.g. from Kostrov tensor).
+    vecs_b : array-like, shape (3, 3)
+        Eigenvectors as columns (e.g. from model tensor).
+    labels_a : list of str, optional
+        Names for axes in ``vecs_a`` (for the returned dict).
+    labels_b : list of str, optional
+        Names for axes in ``vecs_b`` (for the returned dict).
+
+    Returns
+    -------
+    angles : numpy.ndarray, shape (3,)
+        Misfit angle in degrees for each matched pair.
+    pairs : list of (int, int)
+        Index pairs (i_a, i_b) giving the matching.
+    """
+    vecs_a = np.asarray(vecs_a, dtype=float)
+    vecs_b = np.asarray(vecs_b, dtype=float)
+    dots = np.abs(vecs_a.T @ vecs_b)
+
+    angles = np.zeros(3)
+    pairs = []
+    used = set()
+    for i in range(3):
+        for j in np.argsort(-dots[i]):
+            if j not in used:
+                used.add(j)
+                angles[i] = np.rad2deg(np.arccos(np.clip(dots[i, j], 0, 1)))
+                pairs.append((i, j))
+                break
+
+    return angles, pairs
 
 
 def slip_tendency(sigma, strikes, dips, eps=1e-12):

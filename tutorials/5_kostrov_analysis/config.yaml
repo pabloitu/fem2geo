@@ -13,8 +13,6 @@ zone:
 data:
   faults: ../data/faults_b.csv     # columns: strike, dip, rake (signed, Aki & Richards)
 
-compare: strain
-
 plot:
   title: "Kostrov analysis"
 

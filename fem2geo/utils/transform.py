@@ -300,8 +300,8 @@ def line_enu2rake(enu, strike, dip, check=False, tol=5e-3):
     Parameters
     ----------
     enu : array-like, shape (3,) or (N, 3)
-    strike : float
-    dip : float
+    strike : float or array-like
+    dip : float or array-like
     check : bool
         If True, verify the line lies in the plane (scalar input only).
     tol : float
@@ -317,25 +317,26 @@ def line_enu2rake(enu, strike, dip, check=False, tol=5e-3):
     if scalar:
         enu = enu[None, :]
 
-    # normalize
     norms = np.linalg.norm(enu, axis=1, keepdims=True)
     enu = enu / np.where(norms < 1e-12, 1.0, norms)
 
     strike_dir, dip_vec, normal = plane_basis_enu(strike, dip)
+    strike_dir = np.atleast_2d(strike_dir)
+    dip_vec = np.atleast_2d(dip_vec)
+    normal = np.atleast_2d(normal)
 
     if check and scalar:
-        proj = np.abs(enu[0] @ normal)
+        proj = np.abs(np.einsum("ij,ij->i", enu[:1], normal[:1])[0])
         if proj > tol:
             raise ValueError(
                 f"Line is not contained in the plane "
                 f"(normal projection = {proj:.5e}, tol = {tol})."
             )
 
-    cs = enu @ strike_dir
-    cu = enu @ (-dip_vec)  # updip component
+    cs = np.einsum("ij,ij->i", enu, strike_dir)
+    cu = np.einsum("ij,ij->i", enu, -dip_vec)
     rake = np.rad2deg(np.arctan2(cu, cs))
 
-    # canonicalize to [0, 180]: axis ambiguity
     rake = rake % 360.0
     rake = np.where(rake > 180.0, 360.0 - rake, rake)
 
@@ -395,8 +396,8 @@ def slip_enu2rake(enu, strike, dip):
     Parameters
     ----------
     enu : array-like, shape (3,) or (N, 3)
-    strike : float
-    dip : float
+    strike : float or array-like
+    dip : float or array-like
 
     Returns
     -------
@@ -409,9 +410,11 @@ def slip_enu2rake(enu, strike, dip):
         enu = enu[None, :]
 
     strike_dir, dip_vec, _ = plane_basis_enu(strike, dip)
+    strike_dir = np.atleast_2d(strike_dir)
+    dip_vec = np.atleast_2d(dip_vec)
 
-    cs = enu @ strike_dir
-    cu = enu @ (-dip_vec)  # updip component
+    cs = np.einsum("ij,ij->i", enu, strike_dir)
+    cu = np.einsum("ij,ij->i", enu, -dip_vec)
     rake = np.rad2deg(np.arctan2(cu, cs))
 
     if scalar:
