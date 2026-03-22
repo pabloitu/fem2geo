@@ -66,7 +66,6 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
@@ -123,6 +122,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     tendency = plot.get("tendency", "both")
     n_strikes = plot.get("n_strikes", 180)
     n_dips = plot.get("n_dips", 45)
+    stress_values = plot.get("stress_values", False)
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)
@@ -135,6 +135,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         cell_cfg
     )
 
+    # load model and extract zone
     path = (job_dir / cfg["model"]).resolve()
 
     # model
@@ -147,6 +148,11 @@ def run(cfg: dict, job_dir: Path) -> None:
     val, vec = sub.avg_principals("stress")
     phi = float((val[1] - val[2]) / (val[0] - val[2]))
 
+    # stereonet grid
+    mesh_strike, mesh_dip = grid_nodes(n_strikes, n_dips)
+    centers_strike, centers_dip = grid_centers(mesh_strike, mesh_dip)
+
+    # figure
     is_double = tendency == "both"
     figsize = plot.get("figsize", [16, 8] if is_double else [8, 8])
     fig = plt.figure(figsize=figsize)
@@ -163,23 +169,22 @@ def run(cfg: dict, job_dir: Path) -> None:
         ax.grid(True)
         ax.set_azimuth_ticks([])
 
+    # tendency fields
     for kind, ax in panels.items():
-
-        mesh_s, mesh_d = grid_nodes(n_strikes, n_dips)
-        cs, cd = grid_centers(mesh_s, mesh_d)
-        # planes = np.column_stack([cs.ravel(), cd.ravel()])
-        vals = TENDENCY_FUNCTIONS[kind](avg_stress, planes=[cs, cd]).reshape(cs.shape)
-
+        vals = TENDENCY_FUNCTIONS[kind](
+            avg_stress, centers_strike.ravel(), centers_dip.ravel()
+        ).reshape(centers_strike.shape)
         stereo_field(
             ax,
-            mesh_s,
-            mesh_d,
+            mesh_strike,
+            mesh_dip,
             vals,
             vmin=0.0,
             vmax=_VMAX[kind],
             cbar_label=_CBAR_LABELS[kind],
         )
 
+    # cell directions
     if show_cell:
         p1, a1 = line_enu2sphe(sub.dir_s1)
         p2, a2 = line_enu2sphe(sub.dir_s2)
@@ -195,6 +200,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                 stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
                 stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
 
+    # average principal directions
     if show_avg:
         p1, a1 = line_enu2sphe(vec[:, 0])
         p2, a2 = line_enu2sphe(vec[:, 1])
@@ -210,6 +216,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                 ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs()
             )
 
+    # fracture data overlays
     if cfg.get("data"):
         data_style = DATA_STYLE.update(plot.get("data", {}))
         data_colors = MODEL_COLORS[1 : len(cfg["data"]) + 1]
@@ -224,16 +231,19 @@ def run(cfg: dict, job_dir: Path) -> None:
                     **data_style.update(color=color).kwargs(),
                 )
 
-    suffix = f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$, $\\phi={phi:.2f}$"
+    # plots
+    if stress_values:
+        suffix = (
+            f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$, $\\phi={phi:.2f}$"
+        )
+    else:
+        suffix = ""
     custom_title = plot.get("title", "")
     for kind, ax in panels.items():
-        ax.set_title(custom_title if custom_title else _TITLES[kind] + suffix, y=1.05)
+        ax.set_title(custom_title + suffix if custom_title else _TITLES[kind] + suffix,
+                     y=1.05)
         ax.legend(fontsize=7)
 
-    # out
-
-    if "vtu" in out:
-        sub.save(out_dir / out.get("vtu", "extract.vtu"))
     fig.savefig(
         out_dir / out.get("figure", "tendency.png"),
         dpi=plot.get("dpi", 200),

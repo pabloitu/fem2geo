@@ -11,6 +11,7 @@ __all__ = [
     "rot_tensor",
     "ensure_normals",
     "resolved_shear_enu",
+    "resolved_rakes",
     "slip_tendency",
     "dilation_tendency",
     "combined_tendency",
@@ -245,6 +246,59 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
         return 0.0, np.zeros(3, dtype=float)
 
     return mag, t_s / mag
+
+
+def resolved_rakes(sigma, strikes, dips, eps=1e-12):
+    """
+    Predicted slip rake from resolved shear traction on each fault.
+
+    For each plane, resolves the shear traction from the stress
+    tensor and converts it to a signed rake (Aki & Richards). Faults
+    where the shear traction magnitude is below ``eps`` get NaN.
+
+    Parameters
+    ----------
+    sigma : array-like, shape (3, 3)
+        Stress tensor in ENU coordinates.
+    strikes : array-like, shape (N,)
+        Strike angles in degrees.
+    dips : array-like, shape (N,)
+        Dip angles in degrees.
+    eps : float
+        Threshold below which shear traction is treated as zero.
+
+    Returns
+    -------
+    numpy.ndarray, shape (N,)
+        Predicted signed rake in degrees. NaN where shear
+        traction is negligible.
+    """
+    S = np.asarray(sigma, dtype=float)
+    if S.shape != (3, 3):
+        raise ValueError("sigma must be shape (3, 3).")
+
+    strikes = np.atleast_1d(np.asarray(strikes, dtype=float))
+    dips = np.atleast_1d(np.asarray(dips, dtype=float))
+
+    # plane normals, shape (N, 3)
+    n = np.atleast_2d(tr.plane_sphe2enu(strikes, dips))
+
+    # traction, normal component, shear component
+    t = n @ S.T
+    t_n = np.einsum("ij,ij->i", t, n)[:, None] * n
+    t_s = t - t_n
+    mag = np.linalg.norm(t_s, axis=1)
+
+    # normalize shear vectors
+    safe = mag > eps
+    t_s[safe] /= mag[safe, None]
+
+    # project onto plane basis to get rake
+    out = np.full(len(strikes), np.nan)
+    if np.any(safe):
+        out[safe] = tr.slip_enu2rake(t_s[safe], strikes[safe], dips[safe])
+
+    return out
 
 
 def slip_tendency(sigma, strikes, dips, eps=1e-12):

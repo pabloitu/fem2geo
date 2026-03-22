@@ -78,23 +78,16 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch
 
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
-from fem2geo.plots import (
-    PlotConfig,
-    stereo_line,
-    stereo_pole,
-    stereo_plane,
-    stereo_slip_arrow,
-)
+from fem2geo.plots import PlotConfig, stereo_line, stereo_pole, stereo_plane, stereo_slip_arrow
 from fem2geo.runner import parse_config
-from fem2geo.utils.tensor import resolved_shear_enu
-from fem2geo.utils.transform import line_enu2sphe, slip_enu2rake
+from fem2geo.utils.tensor import resolved_rakes
+from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -108,6 +101,7 @@ def run(cfg: dict, job_dir: Path) -> None:
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
     out_dir = Path(out.get("dir", job_dir))
 
+    # plot style options
     plane_cfg = plot.get("fault_planes", {})
     obs_cfg = plot.get("observed_slip", {})
     pred_cfg = plot.get("predicted_slip", {})
@@ -151,9 +145,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         fault_datasets[name] = sd
 
     if not fault_datasets:
-        raise ValueError(
-            "No fault datasets found. CSV files must have strike, dip, rake columns."
-        )
+        raise ValueError("No fault datasets found. CSV files must have strike, dip, rake columns.")
 
     # figure
     fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
@@ -162,55 +154,25 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # plot fault data
     for name, fd in fault_datasets.items():
-        for i in range(len(fd)):
-            strike, dip, rk = fd.planes[i, 0], fd.planes[i, 1], fd.rakes[i]
+        strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
 
-            # fault plane
-            if show_planes:
-                if plane_style == "planes":
-                    stereo_plane(
-                        ax,
-                        strike,
-                        dip,
-                        color=plane_color,
-                        alpha=plane_alpha,
-                        linewidth=plane_lw,
-                    )
-                else:
-                    stereo_pole(
-                        ax,
-                        strike,
-                        dip,
-                        color=plane_color,
-                        marker="+",
-                        markersize=6,
-                        alpha=plane_alpha,
-                    )
+        # fault planes or poles
+        if show_planes:
+            if plane_style == "planes":
+                stereo_plane(ax, strikes, dips, color=plane_color,
+                             alpha=plane_alpha, linewidth=plane_lw)
+            else:
+                stereo_pole(ax, strikes, dips, color=plane_color,
+                            marker="+", markersize=6, alpha=plane_alpha)
 
-            # observed slip arrow
-            stereo_slip_arrow(
-                ax,
-                strike,
-                dip,
-                rk,
-                color=obs_color,
-                arrowsize=obs_arrowsize,
-                linewidth=obs_lw,
-            )
+        # observed slip arrows
+        stereo_slip_arrow(ax, strikes, dips, rakes,
+                          color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw)
 
-            # predicted slip arrow (resolved shear traction)
-            _, tau_hat = resolved_shear_enu(avg_stress, plane=[strike, dip])
-            if np.linalg.norm(tau_hat) > 1e-12:
-                pred_rake = slip_enu2rake(tau_hat, strike, dip)
-                stereo_slip_arrow(
-                    ax,
-                    strike,
-                    dip,
-                    pred_rake,
-                    color=pred_color,
-                    arrowsize=pred_arrowsize,
-                    linewidth=pred_lw,
-                )
+        # predicted slip arrows (resolved shear traction)
+        pred = resolved_rakes(avg_stress, strikes, dips)
+        stereo_slip_arrow(ax, strikes, dips, pred,
+                          color=pred_color, arrowsize=pred_arrowsize, linewidth=pred_lw)
 
     # average principal directions
     if show_avg:
@@ -224,84 +186,30 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # legend
     legend_elements = [
-        FancyArrowPatch(
-            (0, 0),
-            (0.02, 0),
-            arrowstyle="->",
-            color=obs_color,
-            lw=obs_lw,
-            label="Observed slip",
-        ),
-        FancyArrowPatch(
-            (0, 0),
-            (0.02, 0),
-            arrowstyle="->",
-            color=pred_color,
-            lw=pred_lw,
-            label="Predicted slip",
-        ),
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=obs_color, lw=obs_lw, label="Observed slip"),
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=pred_color, lw=pred_lw, label="Predicted slip"),
     ]
     if show_planes:
         if plane_style == "planes":
             legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    color=plane_color,
-                    linewidth=plane_lw,
-                    alpha=plane_alpha,
-                    label="Fault planes",
-                )
-            )
+                Line2D([0], [0], color=plane_color, linewidth=plane_lw,
+                       alpha=plane_alpha, label="Fault planes"))
         else:
             legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    color=plane_color,
-                    linewidth=0,
-                    marker="+",
-                    markersize=6,
-                    alpha=plane_alpha,
-                    label="Fault poles",
-                )
-            )
+                Line2D([0], [0], color=plane_color, linewidth=0, marker="+",
+                       markersize=6, alpha=plane_alpha, label="Fault poles"))
     if show_avg:
-        legend_elements.extend(
-            [
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style.color,
-                    linewidth=0,
-                    marker="o",
-                    label=r"$\sigma_1$",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style.color,
-                    linewidth=0,
-                    marker="s",
-                    label=r"$\sigma_2$",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style.color,
-                    linewidth=0,
-                    marker="v",
-                    label=r"$\sigma_3$",
-                ),
-            ]
-        )
+        legend_elements.extend([
+            Line2D([0], [0], color=avg_style.color, linewidth=0, marker="o", label=r"$\sigma_1$"),
+            Line2D([0], [0], color=avg_style.color, linewidth=0, marker="s", label=r"$\sigma_2$"),
+            Line2D([0], [0], color=avg_style.color, linewidth=0, marker="v", label=r"$\sigma_3$"),
+        ])
 
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(plot.get("title", "Resolved shear analysis"), y=1.08)
-    fig.savefig(
-        out_dir / out.get("figure", "resolved_shear.png"),
-        dpi=plot.get("dpi", 200),
-        bbox_inches="tight",
-    )
+    fig.savefig(out_dir / out.get("figure", "resolved_shear.png"),
+                dpi=plot.get("dpi", 200), bbox_inches="tight")
     plt.close(fig)
     log.info(f"Saved results: {out_dir}")

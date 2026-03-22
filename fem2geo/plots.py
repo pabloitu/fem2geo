@@ -23,9 +23,6 @@ class PlotConfig:
     """
     Bag of matplotlib style parameters. Fields left as None are omitted
     when passed to matplotlib, so the library defaults apply.
-
-    Use :meth:`update` to override fields from a config dict or kwargs,
-    and :meth:`kwargs` to get a clean dict for matplotlib calls.
     """
     color:           str   = None
     marker:          str   = None
@@ -101,7 +98,7 @@ def _unpack_args(first, second, kind):
 def stereo_line(ax, plunge, azimuth=None, label=None, **kwargs):
     """
     Plot line elements on a stereonet. Accepts separate arrays or
-    a packed (N, 2) array for backward compatibility.
+    a packed (N, 2) array.
     """
     plunge, azimuth = _unpack_args(plunge, azimuth, ("plunge", "azimuth"))
     ax.line(plunge, azimuth, label=label, **kwargs)
@@ -122,8 +119,8 @@ def stereo_plane(ax, strike, dip=None, label=None, **kwargs):
     a packed (N, 2) array.
     """
     strike, dip = _unpack_args(strike, dip, ("strike", "dip"))
-    for n in range(len(strike)):
-        ax.plane(strike[n], dip[n], label=label if n == 0 else None, **kwargs)
+    for i in range(len(strike)):
+        ax.plane(strike[i], dip[i], label=label if i == 0 else None, **kwargs)
 
 
 def stereo_arrow(
@@ -154,19 +151,20 @@ def stereo_slip_arrow(
     color="k", arrowsize=1.0, linewidth=1.0, length=0.08, label=None,
 ):
     """
-    Draw a slip direction arrow on a stereonet for a fault plane.
+    Draw slip direction arrows on a stereonet for fault planes.
 
-    The arrow is anchored at the slip line's stereonet position and points
-    toward the pole for reverse sense (rake > 0) or away for normal sense
-    (rake < 0), following the Aki & Richards convention.
+    Accepts scalar or array inputs. Each arrow is anchored at the
+    slip line's stereonet position and points toward the pole for
+    reverse sense (rake > 0) or away for normal sense (rake < 0),
+    following the Aki & Richards convention.
 
     Parameters
     ----------
     ax : mplstereonet axes
-    strike, dip : float
-        Fault plane orientation in degrees.
-    signed_rake : float
-        Signed rake in degrees (Aki & Richards convention, (-180, 180]).
+    strike, dip : float or array-like
+        Fault plane orientation(s) in degrees.
+    signed_rake : float or array-like
+        Signed rake in degrees (Aki & Richards, (-180, 180]).
     color : str
     arrowsize : float
         Scales arrow head size.
@@ -174,24 +172,34 @@ def stereo_slip_arrow(
     length : float
         Arrow length in projected stereonet coordinates (radians).
     label : str, optional
+        Applied only to the first arrow.
     """
-    plunge, azm = line_rake2sphe(strike, dip, abs(signed_rake))
+    strike = np.atleast_1d(np.asarray(strike, dtype=float))
+    dip = np.atleast_1d(np.asarray(dip, dtype=float))
+    signed_rake = np.atleast_1d(np.asarray(signed_rake, dtype=float))
 
-    sx, sy = mplstereonet.line(plunge, azm)
-    sx, sy = sx[0], sy[0]
-    px, py = mplstereonet.pole(strike, dip)
-    px, py = px[0], py[0]
+    for i in range(len(strike)):
+        if np.isnan(signed_rake[i]):
+            continue
 
-    dist = np.hypot(px - sx, py - sy)
-    if dist < 1e-12:
-        return
+        plunge, azm = line_rake2sphe(strike[i], dip[i], abs(signed_rake[i]))
 
-    dx, dy = (px - sx) / dist, (py - sy) / dist
-    if signed_rake < 0:
-        dx, dy = -dx, -dy
+        sx, sy = mplstereonet.line(plunge, azm)
+        sx, sy = sx[0], sy[0]
+        px, py = mplstereonet.pole(strike[i], dip[i])
+        px, py = px[0], py[0]
 
-    stereo_arrow(ax, (sx, sy), (sx + length * dx, sy + length * dy),
-                 color=color, arrowsize=arrowsize, linewidth=linewidth, label=label)
+        dist = np.hypot(px - sx, py - sy)
+        if dist < 1e-12:
+            continue
+
+        dx, dy = (px - sx) / dist, (py - sy) / dist
+        if signed_rake[i] < 0:
+            dx, dy = -dx, -dy
+
+        stereo_arrow(ax, (sx, sy), (sx + length * dx, sy + length * dy),
+                     color=color, arrowsize=arrowsize, linewidth=linewidth,
+                     label=label if i == 0 else None)
 
 
 def stereo_contour(

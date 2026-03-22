@@ -21,6 +21,7 @@ plot:
   dpi: 300
   n_strikes: 360
   n_dips: 90
+  stress_values: True
   avg_directions:
     show: true
     color: "black"
