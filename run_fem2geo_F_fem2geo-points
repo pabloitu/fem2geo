@@ -1,0 +1,8 @@
+#!/bin/bash
+python3 /home/cecilem/Codes/fem2geo/fem2geo/examples/F_SlipDilationSummarisedTendency_plot_MultiplePoints.py \
+	--model_name StrSF \
+    --example_dir ../ \
+    --filename pStrSF.2.vtu \
+	--points ./StrSF_fem2geo-points.csv \
+	--outdir ./output_F_TsTdTsd \
+	--dpi 150

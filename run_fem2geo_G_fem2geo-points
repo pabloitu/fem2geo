@@ -1,0 +1,10 @@
+#!/bin/bash
+python3 /home/cecilem/Codes/fem2geo/fem2geo/examples/G_SummarisedTendency_plot_MultiplePoints.py \
+	--model_name StrSF \
+    --example_dir ../ \
+    --filename pStrSF.2.vtu \
+	--points ./StrSF_fem2geo-points.csv \
+	--outdir ./output_G_Tsd \
+	--dpi 150 \
+	--color_min_summary 0 \
+	--color_max_summary 2

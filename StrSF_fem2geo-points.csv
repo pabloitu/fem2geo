@@ -1,0 +1,9 @@
+Point_label,Point_nb,X,Y,Z,radius,within_near-away_from-fault
+West,1,1500,5000,-3000,500,away
+Footwall,2,7300,5500,-3000,500,near
+Fault,3,7700,4900,-3000,300,within
+Hangingwall,4,8400,4500,-3000,500,near
+East,5,13500,5000,-3000,500,away
+NW_tip,6,10700,8800,-3000,500,near
+N_tip,7,11800,8300,-3000,500,near
+NE_tip,8,12300,7300,-3000,500,near
