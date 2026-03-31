@@ -11,3 +11,7 @@ zone:
   type: sphere
   center: [25, 30, -10]
   radius: 1
+
+output:
+  dir: multiple_models/
+  figure: directions_scatter.png

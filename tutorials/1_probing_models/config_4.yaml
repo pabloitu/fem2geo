@@ -27,5 +27,5 @@ plot:
     linewidth: 1.5
 
 output:
-  dir: results/
+  dir: multiple_models_scatter/
   figure: multiple_models.png

@@ -1,0 +1,4 @@
+.. _tendency:
+
+Tendency Plots
+==============

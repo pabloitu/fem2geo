@@ -114,6 +114,7 @@ Each tutorial folder contains a minimal `config.yaml` and a fully annotated
 
 ## Roadmap
 
+- Add different metrics to ``principal_directions``
 - Borehole module: sample model variables along a borehole trajectory
 - Seismic catalog module: import focal mechanisms and compare with model stress orientations
 - Raster module: compare model plan-view outputs with surface observations

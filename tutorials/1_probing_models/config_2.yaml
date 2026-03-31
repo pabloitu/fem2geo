@@ -22,6 +22,4 @@ plot:
     alpha: 0.3
 
 output:
-  figure: directions_scatter.png
-  dir: results/
-  vtu: extracted_zone.vtu
+  dir: scatter/

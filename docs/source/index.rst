@@ -45,15 +45,17 @@ fem2geo
    :height: 42px
 
 
-Contents
---------
 
 +----------------------------------------------+----------------------------------------------+
-| |start| **Installation Guide**               |  |theory| **Theory and Conventions**         |
-+----------------------------------------------+----------------------------------------------+
-| |concepts| **Core Concepts**                 | |tutorials| **Tutorials**                    |
-+----------------------------------------------+----------------------------------------------+
-| |jobs| **Jobs Reference**                    | |api| **API Reference**                      |
+| |start| **Installation Guide**               | |tutorials| **Tutorials**                    |
+|                                              |                                              |
+| |theory| **Theory and Conventions**          | - :ref:`principal-directions`                |
+|                                              | - :ref:`fracture`                            |
+| |concepts| **Core Concepts**                 | - :ref:`resolved-shear`                      |
+|                                              | - :ref:`kostrov`                             |
+| |jobs| **Jobs Reference**                    | - :ref:`tendency`                            |
+|                                              |                                              |
+| |api| **API Reference**                      |                                              |
 +----------------------------------------------+----------------------------------------------+
 
 .. admonition:: Quickstart
@@ -135,11 +137,10 @@ Useful links
    :caption: Tutorials
 
    tutorials/principal-directions
-   tutorials/model-comparison
-   tutorials/fracture-analysis
-   tutorials/tendency
+   tutorials/fracture
    tutorials/resolved-shear
    tutorials/kostrov
+   tutorials/tendency
 
 
 .. toctree::
