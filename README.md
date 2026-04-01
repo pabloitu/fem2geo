@@ -7,9 +7,9 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fem2geo)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19096967.svg)](https://doi.org/10.5281/zenodo.19096967)
 
-**Physics-Based Modeling to Structural Geology and Seismology**
+**Physics-Based Modeling to Structural Geology**
 
-A Python library for structural geology and seismology analyses on outputs from finite
+A Python library for structural geology analyses on outputs from finite
 element (FEM) or boundary element (BEM) models. `fem2geo` bridges numerical simulations
 and field observations: it loads model outputs, extracts regions of interest, computes
 geomechanical variables, and produces publication-quality stereonet figures.
@@ -114,6 +114,7 @@ Each tutorial folder contains a minimal `config.yaml` and a fully annotated
 
 ## Roadmap
 
+- Add different metrics to ``principal_directions``
 - Borehole module: sample model variables along a borehole trajectory
 - Seismic catalog module: import focal mechanisms and compare with model stress orientations
 - Raster module: compare model plan-view outputs with surface observations

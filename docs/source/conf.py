@@ -51,9 +51,9 @@ copybutton_only_copy_prompt_lines = False
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_theme_options = {
-    "prev_next_buttons_location": "both",
-    "sticky_navigation": True,
-    "collapse_navigation": True,
+    "collapse_navigation": False,
+    "navigation_depth": 4,
+    "titles_only": False,
 }
 
 # Optional: set a logo if you add one under docs/_static/
