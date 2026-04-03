@@ -1,9 +1,9 @@
 job: tendency
-schema: adeli
+schema: adeli3
 units:
   pressure: MPa
 
-model: ../data/cavity_model.vtk
+model: ../data/pNormF.2.vtu
 
 zone:
   type: sphere
