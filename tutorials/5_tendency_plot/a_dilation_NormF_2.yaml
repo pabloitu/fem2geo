@@ -1,0 +1,15 @@
+job: tendency
+schema: adeli3
+
+model: ../data/NormF.2.vtu
+
+zone:
+  type: sphere
+  center: [7500,7500,-3000]
+  radius: 500.0
+
+plot:
+  tendency: dilation
+
+output:
+  dir: dilation_NormF/
