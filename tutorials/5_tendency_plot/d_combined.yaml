@@ -3,12 +3,12 @@ schema: adeli3
 units:
   pressure: MPa
 
-model: ../data/pReveF.2.vtu
+model: ../data/pNormF.2.vtu
 
 zone:
   type: sphere
-  center: [7500,7500,-3000]
-  radius: 500.0
+  center: [24.75, 28.5, -7.3]
+  radius: 1.0
 
 data:
   Set A: ../data/fractures.csv
@@ -16,7 +16,7 @@ data:
 
 plot:
   tendency: combined
-  title: "Combined reactivation tendency [0-2] for Reverse case"
+  title: "Combined reactivation tendency"
   figsize: [10, 10]
   dpi: 300
   n_strikes: 360
@@ -31,5 +31,5 @@ plot:
     alpha: 0.8
 
 output:
-  dir: combined_slip_fracturesAB/
+  dir: combined/
   vtu: extract.vtu
