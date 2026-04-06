@@ -73,7 +73,8 @@ class Model:
 
     See Also
     --------
-    from_file : Construct a Model directly from a VTK/VTU path.
+     :meth:`fem2geo.model.Model.from_file`: Construct a Model directly from a VTK/VTU
+    path.
 
     Attributes
     ----------

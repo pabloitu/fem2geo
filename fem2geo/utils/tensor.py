@@ -346,7 +346,7 @@ def slip_tendency(sigma, strikes, dips, eps=1e-12):
     """
     Normalized slip tendency Ts' for one or many planes.
 
-    Computes |tau| / |sigma_n| normalized by the maximum slip tendency
+    Computes :math:`|\\tau| / |\\sigma_n|` normalized by the maximum slip tendency
     achievable in the given stress state, so the result is always in
     [0, 1]. A value of 1 corresponds to the optimally oriented plane
     for slip (Morris et al., 1996).
@@ -430,7 +430,7 @@ def _ts_max(sigma, eps=1e-12):
 
 def dilation_tendency(sigma, strikes, dips, eps=1e-12):
     """
-    Dilation tendency Td = (s1 - sigma_n) / (s1 - s3).
+    Dilation tendency :math:`T_d = (\\sigma_1 - \\sigma_n) / (\\sigma_1 - \\sigma_3)`.
 
     Parameters
     ----------
@@ -441,7 +441,7 @@ def dilation_tendency(sigma, strikes, dips, eps=1e-12):
     dips : float or array-like
         Dip angle(s) in degrees.
     eps : float
-        Threshold for treating (s1 - s3) as zero (near-isotropic).
+        Threshold for treating :math:`(\\sigma_1 - \\sigma_3)` as zero (near-isotropic).
 
     Returns
     -------
@@ -451,8 +451,10 @@ def dilation_tendency(sigma, strikes, dips, eps=1e-12):
 
     Notes
     -----
-    s1 = min(eigenvalues), s3 = max(eigenvalues). For near-isotropic
-    tensors where |s1 - s3| < eps, returns NaN.
+    For :math:`\\sigma_1` = min(eigenvalues), :math:`\\sigma_3` = max(eigenvalues) and
+    near-isotropic
+    tensors where :math:`|\\sigma_1 - \\sigma_3| < \\epsilon`, returns NaN.
+
     """
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):

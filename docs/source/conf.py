@@ -15,8 +15,6 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.autosummary",
     "sphinx.ext.coverage",
-    "sphinx_toolbox.github",
-    "sphinx_toolbox.sidebar_links",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
@@ -37,7 +35,9 @@ source_suffix = ".rst"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 pygments_style = "default"
 autodoc_typehints = "description"
-
+autodoc_default_options = {
+    'imported-members': False,
+}
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),

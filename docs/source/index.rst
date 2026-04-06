@@ -41,7 +41,7 @@ fem2geo
    :height: 42px
 
 .. |api| image:: https://img.icons8.com/nolan/64/code--v2.png
-   :target: reference/model.html
+   :target: reference/api_reference.html
    :height: 42px
 
 
@@ -145,20 +145,9 @@ Useful links
 
 .. toctree::
    :hidden:
-   :maxdepth: 1
-   :caption: Jobs
-
-   jobs/principal-directions
-   jobs/fracture
-   jobs/tendency
-   jobs/resolved-shear
-   jobs/kostrov
-
-
-.. sidebar-links::
    :caption: Help & Reference
-   :github:
 
    reference/api_reference
+   GitHub Repository <https://github.com/pabloitu/fem2geo>
    Getting Help <https://github.com/pabloitu/fem2geo/issues>
    License <https://github.com/pabloitu/fem2geo/blob/master/LICENSE>

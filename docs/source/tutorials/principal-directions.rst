@@ -66,7 +66,7 @@ The plot now shows both the average directions and the spread of individual cell
 This is useful when you want to check whether the selected region is mechanically coherent or
 whether the principal directions vary strongly within it.
 
-.. figure:: ../_static/principal_directions_3.png
+.. figure:: ../_static/principal_directions_2.png
    :alt: Principal directions with cell-wise scatter
    :width: 60%
    :align: center
