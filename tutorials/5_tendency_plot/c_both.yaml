@@ -1,20 +1,21 @@
 job: tendency
-schema: adeli
+schema: adeli3
 units:
   pressure: MPa
 
-model: ../data/cavity_model.vtk
+model: ../data/pReveF.2.vtu
 
 zone:
   type: sphere
-  center: [24.75, 28.5, -7.3]
-  radius: 1.0
+  center: [7500,7500,-3000]
+  radius: 500.0
 
 data:
   Fracture Set: ../data/fractures_b.csv
 
 plot:
   tendency: both
+  title: "Slip and dilation tendency for a Reverse case"
   figsize: [18, 8]
   dpi: 200
   cell_directions:
@@ -29,5 +30,5 @@ plot:
     alpha: 0.6
 
 output:
-  dir: both/
+  dir: both_slip_dilation_fracturesB_Reverse/
   vtu: extract.vtu

@@ -10,6 +10,7 @@ zone:
 
 plot:
   tendency: dilation
+  title: "Dilation tendency for a normal fault case"
 
 output:
-  dir: dilation/
+  dir: dilation_NormalFault/
