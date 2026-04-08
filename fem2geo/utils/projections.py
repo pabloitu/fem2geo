@@ -62,6 +62,36 @@ def rotate_xy(x, y, x0, y0, angle_deg):
     return x0 + c * dx - s * dy, y0 + s * dx + c * dy
 
 
+def to_lonlat(x, y, src_crs, src_xy_units):
+    """
+    Back-project source XY to lon/lat (EPSG:4326) for bbox filtering.
+
+    If the source CRS is already geographic, returns the inputs unchanged
+    (apart from array conversion). For projected sources, scales XY to
+    meters using ``src_xy_units`` before reprojecting.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Coordinates in the source CRS.
+    src_crs : str or pyproj.CRS
+    src_xy_units : str
+        ``"deg"`` for geographic sources, ``"m"`` or ``"km"`` for projected.
+
+    Returns
+    -------
+    lon, lat : numpy.ndarray
+        Coordinates in degrees, EPSG:4326.
+    """
+    src = CRS.from_user_input(src_crs)
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if src.is_geographic:
+        return x, y
+    s = unit_factor(src_xy_units)
+    return reproject_xy(x * s, y * s, src, "epsg:4326")
+
+
 def bbox_mask(lon, lat, depth_km, lon_range=None, lat_range=None, depth_range_km=None):
     """
     Boolean mask from optional lon/lat/depth ranges. Any range left as

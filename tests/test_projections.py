@@ -6,6 +6,7 @@ from fem2geo.utils.projections import (
     flip_z,
     reproject_xy,
     rotate_xy,
+    to_lonlat,
     bbox_mask,
 )
 
@@ -112,6 +113,37 @@ def test_rotate_360_is_identity():
     x, y = rotate_xy(x0, y0, 0.0, 0.0, 360.0)
     np.testing.assert_allclose(x, x0, atol=1e-12)
     np.testing.assert_allclose(y, y0, atol=1e-12)
+
+
+# to_lonlat
+
+def test_to_lonlat_geographic_passthrough():
+    lon, lat = to_lonlat([-71.07, -70.0], [-20.09, -19.5], "epsg:4326", "deg")
+    np.testing.assert_allclose(lon, [-71.07, -70.0])
+    np.testing.assert_allclose(lat, [-20.09, -19.5])
+
+
+def test_to_lonlat_geographic_returns_ndarray():
+    lon, lat = to_lonlat([1.0], [2.0], "epsg:4326", "deg")
+    assert isinstance(lon, np.ndarray)
+    assert isinstance(lat, np.ndarray)
+
+
+def test_to_lonlat_from_utm_meters():
+    lon, lat = to_lonlat([283554.3], [7777215.8], "epsg:32719", "m")
+    assert lon[0] == pytest.approx(-71.07, abs=1e-4)
+    assert lat[0] == pytest.approx(-20.09, abs=1e-4)
+
+
+def test_to_lonlat_from_utm_km():
+    lon, lat = to_lonlat([283.5543], [7777.2158], "epsg:32719", "km")
+    assert lon[0] == pytest.approx(-71.07, abs=1e-4)
+    assert lat[0] == pytest.approx(-20.09, abs=1e-4)
+
+
+def test_to_lonlat_invalid_units_for_projected():
+    with pytest.raises(ValueError, match="must be 'm' or 'km'"):
+        to_lonlat([0.0], [0.0], "epsg:32719", "deg")
 
 
 # bbox_mask
