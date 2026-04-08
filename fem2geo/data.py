@@ -1,6 +1,6 @@
-"""Structural geology data containers."""
+"""Structural geology and catalog data containers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -72,3 +72,51 @@ class FaultData:
 
     def __repr__(self):
         return f"FaultData({len(self)} measurements)"
+
+
+@dataclass
+class CatalogData:
+    """
+    Point catalog with arbitrary per-point numeric attributes.
+
+    Used for earthquake catalogs, sample locations, observation points,
+    or any tabular dataset where each row has a position and a set of
+    measured values.
+
+    Parameters
+    ----------
+    x, y, z : numpy.ndarray, shape (N,)
+        Point coordinates.
+    attrs : dict[str, numpy.ndarray], optional
+        Per-point numeric attributes. Each value must be a 1D array
+        of length N.
+    """
+
+    x: np.ndarray
+    y: np.ndarray
+    z: np.ndarray
+    attrs: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.x = np.asarray(self.x, dtype=float).ravel()
+        self.y = np.asarray(self.y, dtype=float).ravel()
+        self.z = np.asarray(self.z, dtype=float).ravel()
+        n = self.x.shape[0]
+        if self.y.shape[0] != n or self.z.shape[0] != n:
+            raise ValueError("x, y, z must have the same length.")
+        clean = {}
+        for name, arr in self.attrs.items():
+            arr = np.asarray(arr).ravel()
+            if arr.shape[0] != n:
+                raise ValueError(
+                    f"attr '{name}' has length {arr.shape[0]}, expected {n}."
+                )
+            clean[name] = arr
+        self.attrs = clean
+
+    def __len__(self):
+        return self.x.shape[0]
+
+    def __repr__(self):
+        keys = list(self.attrs)
+        return f"CatalogData({len(self)} points, attrs={keys})"
