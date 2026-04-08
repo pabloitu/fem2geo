@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pyvista as pv
 
-from fem2geo.data import FractureData, FaultData
+from fem2geo.data import FractureData, FaultData, CatalogData
 from fem2geo.internal.schema import ModelSchema
 
 log = logging.getLogger("fem2geoLogger")
@@ -58,6 +58,79 @@ def load_structural_csv(path) -> FractureData | FaultData:
 
     log.info(f"Loaded structural data: {path} ({kind}, {len(rows)} measurements)")
     return data
+
+
+def load_catalog_csv(path, columns) -> CatalogData:
+    """
+    Read a point catalog from a CSV file.
+
+    The three coordinate columns become x, y, z; remaining numeric
+    columns become attrs. Non-numeric columns are dropped with a
+    warning. Empty cells in numeric columns are read as NaN.
+
+    Parameters
+    ----------
+    path : str or Path
+        CSV file with a header row.
+    columns : tuple of str
+        ``(x_col, y_col, z_col)`` column names.
+
+    Returns
+    -------
+    CatalogData
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Catalog file not found: {path}")
+
+    x_col, y_col, z_col = columns
+
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        fields = reader.fieldnames or []
+        for c in (x_col, y_col, z_col):
+            if c not in fields:
+                raise ValueError(
+                    f"Column '{c}' not found in {path}. Available: {fields}"
+                )
+        rows = list(reader)
+
+    if not rows:
+        raise ValueError(f"Catalog file is empty: {path}")
+
+    x = _to_float_col(rows, x_col, path)
+    y = _to_float_col(rows, y_col, path)
+    z = _to_float_col(rows, z_col, path)
+
+    attrs = {}
+    dropped = []
+    for c in fields:
+        if c in (x_col, y_col, z_col):
+            continue
+        try:
+            attrs[c] = _to_float_col(rows, c, path)
+        except ValueError:
+            dropped.append(c)
+
+    if dropped:
+        log.warning(f"  dropped non-numeric columns: {dropped}")
+
+    log.info(
+        f"Loaded catalog: {path} ({len(rows)} points, "
+        f"{len(attrs)} numeric attrs)"
+    )
+    return CatalogData(x=x, y=y, z=z, attrs=attrs)
+
+
+def _to_float_col(rows, name, path):
+    out = np.empty(len(rows), dtype=float)
+    for i, r in enumerate(rows):
+        v = r[name]
+        if v is None or v == "":
+            out[i] = np.nan
+        else:
+            out[i] = float(v)
+    return out
 
 
 def load_grid(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
