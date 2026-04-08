@@ -1,4 +1,3 @@
-# fem2geo
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/source/_static/fem2geo_logo_dark.png">
