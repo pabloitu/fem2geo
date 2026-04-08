@@ -55,6 +55,7 @@ html_theme_options = {
     "navigation_depth": 4,
     "titles_only": False,
 }
+html_logo = "_static/fem2geo_logo.png"
 
 # Optional: set a logo if you add one under docs/_static/
 # html_logo = "_static/fem2geo_logo.svg"

@@ -1,5 +1,12 @@
 # fem2geo
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/source/_static/fem2geo_logo_dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/source/_static/fem2geo_logo.png">
+  <img alt="fem2geo" src="docs/source/_static/fem2geo_logo.svg" width="400">
+</picture>
+    
+
 [![tests](https://github.com/pabloitu/fem2geo/actions/workflows/build-test.yml/badge.svg)](https://github.com/pabloitu/fem2geo/actions/workflows/build-test.yml)
 [![Docs](https://readthedocs.org/projects/fem2geo/badge/?version=latest)](https://fem2geo.readthedocs.io)
 [![codecov](https://codecov.io/gh/pabloitu/fem2geo/graph/badge.svg?token=Q55UKQGTY0)](https://codecov.io/gh/pabloitu/fem2geo)
