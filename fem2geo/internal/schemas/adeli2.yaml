@@ -1,14 +1,5 @@
 solver: adeli2
 
-units:
-  pressure:     Pa
-  distance:     m
-  velocity:     m/s
-  temperature:  C
-  viscosity:    Pa.s
-  strain_rate:  1/s
-  heat_flux:    mW/m2solver: adeli2
-
 tensors:
   stress:
     voigt6: "stresses_(Pa)"
