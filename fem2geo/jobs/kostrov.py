@@ -74,9 +74,10 @@ from matplotlib.lines import Line2D
 
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import get_style, stereo_axes, stereo_axes_contour
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 from fem2geo.utils import tensor
 from fem2geo.utils.tensor import kostrov_tensor, axes_misfit
 
@@ -112,8 +113,11 @@ _K_LOG = ["K1 (short.)", "K2 (int.)", "K3 (ext.)"]
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
     which = cfg.get("tensor", "strain")
 
     kostrov_cfg = plot.get("kostrov", {})

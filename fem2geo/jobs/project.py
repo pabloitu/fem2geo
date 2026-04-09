@@ -11,6 +11,10 @@ For rasters, ``src.xy_units`` applies to the GeoTIFF's CRS (``deg``
 for lon/lat sources, ``m`` or ``km`` for projected) while
 ``src.z_units`` applies to the band value; the two can differ.
 
+Meshes are assumed to be ENU (Z positive up) with XY and Z in the
+same unit. ``src.z_units`` and ``src.z_positive`` are therefore
+ignored for mesh inputs and may be omitted.
+
 An intermediate azimuthal equidistant projection centered on the
 anchor is used automatically; the user does not specify it. The
 anchor always lands at (0, 0) in that projection.
@@ -36,8 +40,8 @@ data:
 src:
   crs: epsg:32719
   xy_units: m                     # deg | m | km
-  z_units: m                      # m | km
-  z_positive: up                  # up | down
+  z_units: m                      # m | km (omit for mesh)
+  z_positive: up                  # up | down (omit for mesh)
   bbox:                           # optional
     lon: [-72.5, -68.0]
     lat: [-22.0, -18.0]
@@ -71,7 +75,7 @@ from pyproj import CRS
 from fem2geo.data import CatalogData
 from fem2geo.internal.io import load_catalog_csv, load_mesh, load_raster
 from fem2geo.projector import Projector
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 from fem2geo.utils.projections import (
     bbox_mask, bbox_to_crs_bounds, bbox_to_src_bounds, flip_z, to_lonlat,
     unit_factor,
@@ -94,12 +98,31 @@ def require(d, prefix, *keys):
 
 
 def run(cfg, job_dir):
-    _, _, _, _, out = parse_config(cfg, job_dir)
+    out = resolve_output(cfg, job_dir)
     out_dir = out["dir"]
 
+    # data (parsed first to know which src keys are required)
+    path, kind, sub = parse_data(cfg.get("data", {}), job_dir)
+
     # src
-    src = cfg.get("src", {})
-    require(src, "src", "crs", "xy_units", "z_units", "z_positive")
+    src = dict(cfg.get("src", {}))
+    if kind == "mesh":
+        require(src, "src", "crs", "xy_units")
+        if "z_units" in src and src["z_units"] != src["xy_units"]:
+            raise ValueError(
+                "src.z_units must equal src.xy_units for mesh inputs "
+                "(or be omitted)."
+            )
+        if "z_positive" in src and src["z_positive"] != "up":
+            raise ValueError(
+                "src.z_positive must be 'up' for mesh inputs (ENU), "
+                "or be omitted."
+            )
+        src["z_units"] = src["xy_units"]
+        src["z_positive"] = "up"
+    else:
+        require(src, "src", "crs", "xy_units", "z_units", "z_positive")
+
     bbox = src.get("bbox")
     if bbox is not None and not isinstance(bbox, dict):
         raise ValueError("src.bbox must be a mapping with lon/lat/depth_km keys.")
@@ -117,9 +140,6 @@ def run(cfg, job_dir):
     lon0, lat0 = parse_anchor_data(anchor["data"], src)
     depth_km = float(anchor["data"]["depth_km"])
     rotation_deg = anchor.get("rotation_deg", 0.0) or None
-
-    # data
-    path, kind, sub = parse_data(cfg.get("data", {}), job_dir)
 
     # projector
     aeqd = CRS.from_proj4(

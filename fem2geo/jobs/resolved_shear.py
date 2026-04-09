@@ -81,11 +81,12 @@ from matplotlib.patches import FancyArrowPatch
 
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
     get_style, stereo_axes, stereo_pole, stereo_plane, stereo_slip_arrow,
 )
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 from fem2geo.utils.tensor import resolved_rakes
 
 log = logging.getLogger("fem2geoLogger")
@@ -97,8 +98,11 @@ PLANE_STYLE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     # plot style options
     plane_cfg = plot.get("fault_planes", {})

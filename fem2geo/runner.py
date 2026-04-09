@@ -29,13 +29,12 @@ def load_config(path: Path) -> dict:
     return cfg
 
 
-def parse_config(cfg: dict, job_dir: Path) -> tuple:
+def resolve_output(cfg: dict, job_dir: Path) -> dict:
     """
-    Parse the shared top-level config keys.
+    Resolve the output directory and create it.
 
-    Returns the schema (constructed from the config) and the raw
-    section dicts for zone, plot, and output. Creates the output
-    directory if it doesn't exist.
+    Returns the ``output`` block with ``dir`` resolved to an absolute
+    Path. Creates the directory if it doesn't exist.
 
     Parameters
     ----------
@@ -47,22 +46,14 @@ def parse_config(cfg: dict, job_dir: Path) -> tuple:
 
     Returns
     -------
-    schema : ModelSchema
-    zone : dict
-    plot : dict
-    out : dict
-        Output config with ``dir`` resolved to an absolute Path.
+    dict
+        The output config with ``dir`` set to an absolute Path.
     """
-    from fem2geo.internal.schema import ModelSchema
-
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
-    zone = cfg.get("zone", {})
-    data = cfg.get("data", {})
-    plot = cfg.get("plot", {})
-    out = cfg.get("output", {})
+    out = dict(cfg.get("output", {}))
     out["dir"] = Path(out.get("dir", job_dir)).resolve()
     out["dir"].mkdir(parents=True, exist_ok=True)
-    return schema, zone, data, plot, out
+    return out
+
 
 def run(job_path: Path, output_dir: Path = None) -> None:
     """

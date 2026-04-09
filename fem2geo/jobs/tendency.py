@@ -67,6 +67,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
     MODEL_COLORS,
@@ -76,7 +77,7 @@ from fem2geo.plots import (
     stereo_axes_contour,
     stereo_pole,
 )
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 from fem2geo.utils.tensor import slip_tendency, dilation_tendency, combined_tendency
 from fem2geo.utils.transform import grid_nodes, grid_centers
 
@@ -115,8 +116,11 @@ _VMAX = {"slip": 1.0, "dilation": 1.0, "combined": 2.0}
 def run(cfg: dict, job_dir: Path) -> None:
 
     # load config
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     tendency = plot.get("tendency", "both")
     n_strikes = plot.get("n_strikes", 180)

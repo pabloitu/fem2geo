@@ -64,6 +64,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
     MODEL_COLORS,
@@ -72,7 +73,7 @@ from fem2geo.plots import (
     stereo_axes_contour,
     stereo_pole,
 )
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -91,8 +92,11 @@ DATA_STYLE = {"markersize": 6, "alpha": 0.8, "marker": "+"}
 def run(cfg: dict, job_dir: Path) -> None:
 
     # Load configs
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)

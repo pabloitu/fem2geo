@@ -81,7 +81,10 @@ Run it with:
 Points of note:
 
 - The slab mesh was stored in UTM zone 19S (``epsg:32719``), with XY and Z
-  both in meters and z positive up.
+  both in meters.
+- Meshes are assumed to be ENU (Z positive up) with a single unit for all
+  three components, so ``src.z_units`` and ``src.z_positive`` are not
+  needed and can be omitted.
 - Because the bbox is specified in lon/lat/depth_km, it works identically
   whether the mesh is in UTM meters or any other CRS.
 - The output keeps the mesh topology and all original point data, written
@@ -199,6 +202,11 @@ Describes the coordinates inside the input file:
 - ``bbox`` is always specified in lon/lat/depth_km *regardless of the
   source CRS*, so configs stay comparable across datasets. Any axis left
   out is unconstrained. ``depth_km`` is always positive-down.
+
+.. note::
+
+   Mesh inputs are assumed to be ENU: Z positive up, with XY and Z in
+   the same unit.
 
 The ``dst`` block
 ^^^^^^^^^^^^^^^^^

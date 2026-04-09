@@ -19,11 +19,11 @@ dst:
   units: km
   anchor:
     data:
-      lon: -71.07
-      lat: -20.09
-      depth_km: 15.6
-    model: [0, 0, -14]
-    rotation_deg: -20
+      lon: -71.1
+      lat: -20.17
+      depth_km: 16
+    model: [0, 0, -12.8]
+    rotation_deg: -10
 
 output:
   dir: results/

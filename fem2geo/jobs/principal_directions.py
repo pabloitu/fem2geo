@@ -56,10 +56,11 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from fem2geo.model import Model
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.plots import (
     MODEL_COLORS, get_style, stereo_axes, stereo_axes_contour,
 )
-from fem2geo.runner import parse_config
+from fem2geo.runner import resolve_output
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -72,8 +73,11 @@ CONTOUR_STYLE = {"color": "red", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
 def run(cfg: dict, job_dir: Path) -> None:
 
     # read and parse different config segments
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
+    out = resolve_output(cfg, job_dir)
     out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     # model paths
     models = cfg.get("models", {"model": cfg.get("model")})
