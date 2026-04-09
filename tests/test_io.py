@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 
 from fem2geo.data import CatalogData
-from fem2geo.internal.io import load_grid, load_catalog_csv, _normalize
+from fem2geo.internal.io import load_solver_output, load_catalog_csv, _normalize
 from fem2geo.internal.schema import ModelSchema
 
 
@@ -27,7 +27,7 @@ def _load(cell_data, schema_dict):
     schema = ModelSchema.from_dict(schema_dict)
     g = _grid(cell_data)
     with patch("fem2geo.internal.io.pv.read", return_value=g):
-        return load_grid("dummy.vtk", schema=schema)
+        return load_solver_output("dummy.vtk", schema=schema)
 
 
 class TestNormalize(unittest.TestCase):
