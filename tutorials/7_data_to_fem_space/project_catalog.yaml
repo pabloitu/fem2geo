@@ -1,0 +1,30 @@
+job: project
+
+data:
+  file: ../data/catalog_interface.csv
+  catalog:
+    columns: [longitude, latitude, depth]
+
+src:
+  crs: epsg:4326
+  xy_units: deg
+  z_units: km
+  z_positive: down
+  bbox:
+    lon: [-73.0, -69.0]
+    lat: [-21.5, -18.0]
+    depth_km: [0, 70]
+
+dst:
+  units: km
+  anchor:
+    data:
+      lon: -71.07
+      lat: -20.09
+      depth_km: 15.6
+    model: [0, 0, -14]
+    rotation_deg: -20
+
+output:
+  dir: results/
+  file: catalog_fem_space.vtp

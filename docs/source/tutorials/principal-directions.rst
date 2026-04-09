@@ -1,6 +1,6 @@
 .. _principal-directions:
 
-Principal directions
+Principal Directions
 ====================
 
 This tutorial shows how to probe the stress state of a model at a selected location and
