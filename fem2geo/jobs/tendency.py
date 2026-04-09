@@ -71,8 +71,8 @@ import numpy as np
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
 from fem2geo.plots import (
-    PlotConfig,
     MODEL_COLORS,
+    get_style,
     stereo_field,
     stereo_axes,
     stereo_axes_contour,
@@ -87,10 +87,10 @@ log = logging.getLogger("fem2geoLogger")
 _VALID_TENDENCIES = ("slip", "dilation", "combined", "both")
 
 # Plot defaults
-AVG_STYLE = PlotConfig(color="white", markersize=8, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="k", markersize=3, alpha=0.4)
-CONTOUR_STYLE = PlotConfig(color="k", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(markersize=5, alpha=0.7, marker="+")
+AVG_STYLE = {"color": "white", "markersize": 8, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "k", "markersize": 3, "alpha": 0.4}
+CONTOUR_STYLE = {"color": "k", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+DATA_STYLE = {"markersize": 5, "alpha": 0.7, "marker": "+"}
 
 _CBAR_LABELS = {
     "slip": r"Slip tendency $T'_s$",
@@ -127,14 +127,13 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)
-    avg_style = AVG_STYLE.update(avg_cfg)
+    avg_style = get_style(AVG_STYLE, avg_cfg)
 
     cell_cfg = plot.get("cell_directions", {})
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(
-        cell_cfg
-    )
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
 
     # load model and extract zone
     path = (job_dir / cfg["model"]).resolve()
@@ -202,7 +201,7 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # fracture data overlays
     if cfg.get("data"):
-        data_style = DATA_STYLE.update(plot.get("data", {}))
+        data_style = get_style(DATA_STYLE, plot.get("data", {}))
         data_colors = MODEL_COLORS[1 : len(cfg["data"]) + 1]
         for color, (name, path) in zip(data_colors, cfg["data"].items()):
             fd = load_structural_csv((job_dir / path).resolve())
@@ -212,7 +211,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                     fd.planes[:, 0],
                     fd.planes[:, 1],
                     label=name,
-                    **data_style.update(color=color).kwargs(),
+                    **get_style(data_style, color=color),
                 )
 
     # plots

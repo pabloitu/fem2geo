@@ -10,6 +10,7 @@ __all__ = [
     "eigenvectors",
     "rot_tensor",
     "ensure_normals",
+    "reconstruct_from_principals",
     "resolved_shear_enu",
     "resolved_rakes",
     "slip_tendency",
@@ -186,6 +187,29 @@ def ensure_normals(normals):
     if np.any(nn == 0):
         raise ValueError("normal vectors must be non-zero.")
     return n / nn[:, None]
+
+
+def reconstruct_from_principals(values, directions):
+    """
+    Build symmetric tensors from principal values and directions.
+
+    Computes the dyad sum :math:`\\sum_i v_i (d_i \\otimes d_i)` per cell.
+
+    Parameters
+    ----------
+    values : array-like, shape (N, 3)
+        Principal values per cell, columns ordered to match directions.
+    directions : array-like, shape (N, 3, 3)
+        Principal directions stored as columns: ``directions[:, :, i]``
+        is the i-th eigenvector.
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3, 3)
+    """
+    values = np.asarray(values, dtype=float)
+    directions = np.asarray(directions, dtype=float)
+    return np.einsum("ni,nji,nki->njk", values, directions, directions)
 
 
 def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):

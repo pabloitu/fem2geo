@@ -11,50 +11,6 @@ from fem2geo.utils import tensor
 log = logging.getLogger("fem2geoLogger")
 
 
-# field descriptors
-
-class ScalarField:
-    """Lazy descriptor for scalar fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj.get(self.name)
-        setattr(obj, self.name, val)
-        return val
-
-
-class VectorField:
-    """Lazy descriptor for vector fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj.get(self.name)
-        setattr(obj, self.name, val)
-        return val
-
-
-class TensorField:
-    """Lazy descriptor for tensor fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj._assemble_tensor(self.name)   # noqa
-        setattr(obj, self.name, val)
-        return val
-
-
 class Model:
     """
     Interface to a FEM/BEM model for geomechanical post-processing.
@@ -134,33 +90,6 @@ class Model:
         Heat flux vectors.
     """
 
-    # tensors
-    strain      = TensorField("strain")
-    strain_rate = TensorField("strain_rate")
-
-    # kinematics
-    u = VectorField("u")
-    v = VectorField("v")
-    t = ScalarField("t")
-
-    # scalar fields
-    i1_strain       = ScalarField("i1_strain")
-    j2_strain       = ScalarField("j2_strain")
-    j2_stress       = ScalarField("j2_stress")
-    i1_strain_rate  = ScalarField("i1_strain_rate")
-    j2_strain_rate  = ScalarField("j2_strain_rate")
-    plastic_eff     = ScalarField("plastic_eff")
-    plastic_vol     = ScalarField("plastic_vol")
-    plastic_yield   = ScalarField("plastic_yield")
-    plastic_mode    = ScalarField("plastic_mode")
-    mean_stress     = ScalarField("mean_stress")
-    viscosity       = ScalarField("viscosity")
-    threshold_ratio = ScalarField("threshold_ratio")
-    temperature     = ScalarField("temperature")
-    fluid_pressure  = ScalarField("fluid_pressure")
-    darcy_vel       = VectorField("darcy_vel")
-    heat_flux       = VectorField("heat_flux")
-
     def __init__(self, grid: pv.UnstructuredGrid, schema: ModelSchema):
         self.grid = grid
         self.schema = schema
@@ -185,6 +114,96 @@ class Model:
         if isinstance(schema, str):
             schema = ModelSchema.builtin(schema)
         return cls(load_solver_output(path, schema), schema)
+
+    # tensors
+
+    @cached_property
+    def strain(self):
+        return self._assemble_tensor("strain")
+
+    @cached_property
+    def strain_rate(self):
+        return self._assemble_tensor("strain_rate")
+
+    # kinematics
+
+    @cached_property
+    def u(self):
+        return self.get("u")
+
+    @cached_property
+    def v(self):
+        return self.get("v")
+
+    @cached_property
+    def t(self):
+        return self.get("t")
+
+    # scalar fields
+
+    @cached_property
+    def i1_strain(self):
+        return self.get("i1_strain")
+
+    @cached_property
+    def j2_strain(self):
+        return self.get("j2_strain")
+
+    @cached_property
+    def j2_stress(self):
+        return self.get("j2_stress")
+
+    @cached_property
+    def i1_strain_rate(self):
+        return self.get("i1_strain_rate")
+
+    @cached_property
+    def j2_strain_rate(self):
+        return self.get("j2_strain_rate")
+
+    @cached_property
+    def plastic_eff(self):
+        return self.get("plastic_eff")
+
+    @cached_property
+    def plastic_vol(self):
+        return self.get("plastic_vol")
+
+    @cached_property
+    def plastic_yield(self):
+        return self.get("plastic_yield")
+
+    @cached_property
+    def plastic_mode(self):
+        return self.get("plastic_mode")
+
+    @cached_property
+    def mean_stress(self):
+        return self.get("mean_stress")
+
+    @cached_property
+    def viscosity(self):
+        return self.get("viscosity")
+
+    @cached_property
+    def threshold_ratio(self):
+        return self.get("threshold_ratio")
+
+    @cached_property
+    def temperature(self):
+        return self.get("temperature")
+
+    @cached_property
+    def fluid_pressure(self):
+        return self.get("fluid_pressure")
+
+    @cached_property
+    def darcy_vel(self):
+        return self.get("darcy_vel")
+
+    @cached_property
+    def heat_flux(self):
+        return self.get("heat_flux")
 
     # geometry
 
@@ -223,7 +242,19 @@ class Model:
                 return self._assemble_tensor("stress")
             except KeyError:
                 log.warning("Full stress tensor not found")
-        return self._reconstruct_stress()
+
+        required = ("val_s1", "val_s3", "dir_s1", "dir_s3")
+        missing = [
+            k for k in required
+            if k not in self.grid.cell_data
+            and k not in self.grid.point_data
+        ]
+        if missing:
+            raise KeyError(f"Cannot assemble stress — missing: {missing}")
+        log.warning("Reconstructing stress tensor from principals.")
+        vals = np.column_stack([self.val_s1, self.val_s2, self.val_s3])
+        dirs = np.stack([self.dir_s1, self.dir_s2, self.dir_s3], axis=-1)
+        return tensor.reconstruct_from_principals(vals, dirs)
 
     @cached_property
     def stress_dev(self) -> np.ndarray:
@@ -235,25 +266,6 @@ class Model:
         s = self.stress
         trace = np.trace(s, axis1=1, axis2=2)
         return s - (trace / 3.0)[:, None, None] * np.eye(3)
-
-    def _reconstruct_stress(self) -> np.ndarray:
-        required = ("val_s1", "val_s3", "dir_s1", "dir_s3")
-        missing = [
-            k for k in required
-            if k not in self.grid.cell_data
-            and k not in self.grid.point_data
-        ]
-        if missing:
-            raise KeyError(f"Cannot assemble stress — missing: {missing}")
-        log.warning("Reconstructing stress tensor from principals.")
-        v1, v3 = self.val_s1, self.val_s3
-        v2 = -(v1 + v3)
-        d1, d2, d3 = self.dir_s1, self.dir_s2, self.dir_s3
-        return (
-            v1[:, None, None] * (d1[:, :, None] * d1[:, None, :])
-            + v2[:, None, None] * (d2[:, :, None] * d2[:, None, :])
-            + v3[:, None, None] * (d3[:, :, None] * d3[:, None, :])
-        )
 
     # strain
 
@@ -272,7 +284,25 @@ class Model:
                 log.warning(
                     "strain_plastic missing — reconstructing assuming coaxiality."
                 )
-        return self._reconstruct_plastic_strain()
+
+        try:
+            eff = self.plastic_eff
+            vol = self.plastic_vol
+        except KeyError:
+            log.info("No plastic strain data — assuming elastic model.")
+            return np.zeros((self.n_cells, 3, 3))
+
+        if np.all(eff == 0) and np.all(vol == 0):
+            return np.zeros((self.n_cells, 3, 3))
+
+        dev = np.column_stack([self.val_s1, self.val_s2, self.val_s3])
+        j2 = np.sqrt(0.5 * np.sum(dev**2, axis=1, keepdims=True))
+        j2 = np.where(j2 < 1e-30, 1.0, j2)
+        shape = dev / j2
+
+        ep = eff[:, None] * shape + (vol / 3.0)[:, None]
+        dirs = np.stack([self.dir_s1, self.dir_s2, self.dir_s3], axis=-1)
+        return tensor.reconstruct_from_principals(ep, dirs)
 
     @cached_property
     def strain_elastic(self) -> np.ndarray:
@@ -291,36 +321,8 @@ class Model:
                 )
         return self.strain - self.strain_plastic
 
-    def _reconstruct_plastic_strain(self) -> np.ndarray:
-        try:
-            eff = self.plastic_eff
-            vol = self.plastic_vol
-        except KeyError:
-            log.info("No plastic strain data — assuming elastic model.")
-            return np.zeros((self.n_cells, 3, 3))
-
-        if np.all(eff == 0) and np.all(vol == 0):
-            return np.zeros((self.n_cells, 3, 3))
-
-        d1, d2, d3 = self.dir_s1, self.dir_s2, self.dir_s3
-        s1, s2, s3 = self.val_s1, self.val_s2, self.val_s3
-        dev = np.column_stack([s1, s2, s3])
-
-        j2 = np.sqrt(0.5 * np.sum(dev**2, axis=1, keepdims=True))
-        j2 = np.where(j2 < 1e-30, 1.0, j2)
-        shape = dev / j2
-
-        ep_dev = eff[:, None] * shape
-        ep = ep_dev + (vol / 3.0)[:, None]
-
-        return (
-            ep[:, 0, None, None] * (d1[:, :, None] * d1[:, None, :])
-            + ep[:, 1, None, None] * (d2[:, :, None] * d2[:, None, :])
-            + ep[:, 2, None, None] * (d3[:, :, None] * d3[:, None, :])
-        )
-
-
     # principal stress directions
+
     @cached_property
     def dir_s1(self) -> np.ndarray:
         """
@@ -513,16 +515,9 @@ class Model:
         numpy.ndarray, shape (3, 3)
             Symmetric average tensor.
         """
-        computed = {
-            "stress", "stress_dev", "strain", "strain_rate",
-            "strain_plastic", "strain_elastic",
-        }
-        tensors = (
-            getattr(self, name) if name in computed
-            else self._assemble_tensor(name)
-        )
+        t = getattr(self, name)
         w = self.volumes
-        return np.einsum("ijk,i->jk", tensors, w) / w.sum()
+        return np.einsum("ijk,i->jk", t, w) / w.sum()
 
     def avg_principals(self, name: str = "stress") -> tuple:
         """

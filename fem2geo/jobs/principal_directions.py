@@ -58,15 +58,17 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, MODEL_COLORS, stereo_axes, stereo_axes_contour
+from fem2geo.plots import (
+    MODEL_COLORS, get_style, stereo_axes, stereo_axes_contour,
+)
 from fem2geo.runner import parse_config
 
 log = logging.getLogger("fem2geoLogger")
 
 # Default Plot Properties
-AVG_STYLE = PlotConfig(color="red", markersize=8, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="red", markersize=3, markeredgecolor="none", alpha=0.4)
-CONTOUR_STYLE = PlotConfig(color="red", levels=4, sigma=2.0, linewidth=1.0)
+AVG_STYLE = {"color": "red", "markersize": 8, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "red", "markersize": 3, "markeredgecolor": "none", "alpha": 0.4}
+CONTOUR_STYLE = {"color": "red", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
 
 
 def run(cfg: dict, job_dir: Path) -> None:
@@ -79,15 +81,15 @@ def run(cfg: dict, job_dir: Path) -> None:
     models = cfg.get("models", {"model": cfg.get("model")})
 
     # plot options
-    avg_cfg = plot.get("avg_directions", {})    # Config for model average
-    avg_show = avg_cfg.get("show", True)        # Flag to show model average
-    avg_pc = AVG_STYLE.update(avg_cfg)          # Plot config, default at top of module
+    avg_cfg = plot.get("avg_directions", {})
+    avg_show = avg_cfg.get("show", True)
+    avg_pc = get_style(AVG_STYLE, avg_cfg)
 
-    cell_cfg = plot.get("cell_directions", {})      # Config for per-cell plot
-    cell_show = cell_cfg.get("show", False)         # Flag to show per-cell
-    cell_style = cell_cfg.get("style", "scatter")   # scatter or contour
-    cell_pc = CONTOUR_STYLE.update(cell_cfg) if cell_style == "contour" \
-        else CELL_STYLE.update(cell_cfg)
+    cell_cfg = plot.get("cell_directions", {})
+    cell_show = cell_cfg.get("show", False)
+    cell_style = cell_cfg.get("style", "scatter")
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
 
     # figure
     fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
@@ -113,7 +115,7 @@ def run(cfg: dict, job_dir: Path) -> None:
             cell_vecs = np.stack(
                 [model.dir_s1, model.dir_s2, model.dir_s3], axis=-1
             )
-            cpc = cell_pc.update(color=color)
+            cpc = get_style(cell_pc, color=color)
             if cell_style == "contour":
                 stereo_axes_contour(ax, cell_vecs, cpc)
             else:
@@ -122,7 +124,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         if avg_show:
             _, vec = model.avg_principals()
             label = name if len(models) > 1 else None
-            apc = avg_pc.update(color=color)
+            apc = get_style(avg_pc, color=color)
             stereo_axes(ax, vec, apc, labels=(label, None, None))
 
         if len(models) > 1:

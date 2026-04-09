@@ -1,23 +1,32 @@
 """
-Job: kostrov
-============
-Computes the Kostrov (1974) summed moment tensor from a fault population
-and compares its principal axes with the model's average deviatoric stress
-principal directions on a stereonet.
+Job: resolved_shear
+=================
+Visual Resolved Shear stress analysis: compares observed fault slip directions with
+the shear traction predicted by the model stress tensor, plotted together
+on a stereonet. Assumes the Wallace-Bott hypothesis of having the slip direction
+close to the resolved shear stress.
 
-The Kostrov tensor represents the bulk kinematic strain implied by the
-observed fault slip. If the model stress field is mechanically consistent
-with the faulting, the Kostrov shortening axis should align with σ1 and
-the extension axis with σ3.
+For each fault plane (strike/dip/rake, Aki & Richards convention), the job:
 
-Structural data is read from CSV files via
-:func:`fem2geo.internal.io.load_structural_csv`. Only fault data
-(``strike, dip, rake`` with signed rake, Aki & Richards convention) is
-supported. Fracture-only data is skipped with a warning.
+1. Plots the fault plane as a great circle or pole.
+2. Plots the observed slip direction as an arrow on the stereonet (colour A).
+3. Resolves the shear traction from the model's average stress tensor on
+   that fault plane, and plots the predicted slip direction as an arrow
+   (colour B).
+
+If the model stress correctly predicts the fault kinematics, the two
+arrows for each fault should overlap in direction and sense. Systematic
+divergence indicates a stress field inconsistent with the observed faulting.
+
+Rake convention (Aki & Richards):
+  rake > 0  : reverse/thrust component (hanging wall up)
+  rake < 0  : normal component (hanging wall down)
+  rake = 0  : pure left-lateral
+  rake = 180: pure right-lateral
 
 Config reference
 ----------------
-job: kostrov
+job: resolved_shear
 schema: adeli                       # built-in schema name (default: adeli)
 units:                              # optional category-level unit overrides
   pressure: Pa
@@ -33,33 +42,31 @@ zone:
 data:
   faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
-tensor: strain                  #  strain | strain_rate | strain_plastic | strain_elastic
-
 plot:
-  title: "Kostrov analysis"
+  title: "Resolved shear analysis"
   figsize: [8, 8]
   dpi: 200
-  kostrov:                          # Kostrov tensor principal axes
-    color: "#E63946"                # red
-    markersize: 10
-  model:                            # model principal axes
-    color: "#2196F3"                # blue
-    markersize: 10
-  cell_directions:                  # per-cell model directions (default: show=false)
-    show: false
-    style: scatter                  # scatter | contour
+  fault_planes:
+    show: true
+    style: planes                   # poles | planes
     color: "grey"
-    markersize: 3
-    alpha: 0.3
-  data_spread:                      # per-fault P/T axes (default: show=false)
-    show: false
-    style: scatter                  # scatter | contour
-    color: "#E63946"
-    markersize: 3
-    alpha: 0.3
+    alpha: 0.5
+    linewidth: 0.8
+  observed_slip:
+    color: "#E63946"                # red
+    arrowsize: 1.0
+    linewidth: 1.5
+  predicted_slip:
+    color: "#2196F3"                # blue
+    arrowsize: 1.0
+    linewidth: 1.5
+  avg_directions:
+    show: true
+    color: "k"
+    markersize: 8
 
 output:
-  dir: results/
+  dir: results/                     # optional, defaults to config file directory
   vtu: extract.vtu                  # optional, saves extracted sub-model
 
 Example
@@ -71,68 +78,50 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.lines import Line2D
+from matplotlib.patches import FancyArrowPatch
 
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, stereo_axes, stereo_axes_contour
+from fem2geo.plots import (
+    get_style, stereo_axes, stereo_pole, stereo_plane, stereo_slip_arrow,
+)
 from fem2geo.runner import parse_config
-from fem2geo.utils import tensor
-from fem2geo.utils.tensor import kostrov_tensor, axes_misfit
+from fem2geo.utils.tensor import resolved_rakes
 
 log = logging.getLogger("fem2geoLogger")
 
-KOSTROV_STYLE = PlotConfig(color="#E63946", markersize=10, markeredgecolor="k")
-MODEL_STYLE = PlotConfig(color="#2196F3", markersize=10, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="grey", markersize=3, alpha=0.3)
-CONTOUR_STYLE = PlotConfig(color="grey", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(color="#E63946", markersize=3, alpha=0.3)
-DATA_CONTOUR_STYLE = PlotConfig(color="#E63946", levels=4, sigma=2.0, linewidth=1.0)
-
-_TENSOR_LABELS = {
-    "stress_dev": (r"$\sigma^{\mathrm{dev}}_1$", r"$\sigma^{\mathrm{dev}}_2$",
-                   r"$\sigma^{\mathrm{dev}}_3$"),
-    "strain": (r"$\epsilon_1$", r"$\epsilon_2$", r"$\epsilon_3$"),
-    "strain_rate": (r"$\dot{\epsilon}_1$", r"$\dot{\epsilon}_2$",
-                    r"$\dot{\epsilon}_3$"),
-    "strain_plastic": (r"$\epsilon^p_1$", r"$\epsilon^p_2$", r"$\epsilon^p_3$"),
-    "strain_elastic": (r"$\epsilon^e_1$", r"$\epsilon^e_2$", r"$\epsilon^e_3$"),
-}
-
-_TENSOR_SYMBOL = {
-    "stress_dev": r"$\sigma^{\mathrm{dev}}$",
-    "strain": r"$\epsilon$",
-    "strain_rate": r"$\dot{\epsilon}$",
-    "strain_plastic": r"$\epsilon^p$",
-    "strain_elastic": r"$\epsilon^e$",
-}
-
-_K_LABELS = [r"$K_1$ (shortening)", r"$K_2$ (intermediate)", r"$K_3$ (extension)"]
-_K_LOG = ["K1 (short.)", "K2 (int.)", "K3 (ext.)"]
+AVG_STYLE = {"color": "k", "markersize": 8, "markeredgecolor": "k"}
+OBS_STYLE = {"color": "#E63946", "arrowsize": 1.0, "linewidth": 1.5}
+PRED_STYLE = {"color": "#2196F3", "arrowsize": 1.0, "linewidth": 1.5}
+PLANE_STYLE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
 
 
 def run(cfg: dict, job_dir: Path) -> None:
     schema, zone, data, plot, out = parse_config(cfg, job_dir)
     out_dir = Path(out.get("dir", job_dir))
-    which = cfg.get("tensor", "strain")
 
-    kostrov_cfg = plot.get("kostrov", {})
-    model_cfg = plot.get("model", {})
-    cell_cfg = plot.get("cell_directions", {})
-    data_cfg = plot.get("data_spread", {})
+    # plot style options
+    plane_cfg = plot.get("fault_planes", {})
+    obs_cfg = plot.get("observed_slip", {})
+    pred_cfg = plot.get("predicted_slip", {})
+    avg_cfg = plot.get("avg_directions", {})
 
-    k_style = KOSTROV_STYLE.update(kostrov_cfg)
-    m_style = MODEL_STYLE.update(model_cfg)
-    show_cell = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour"
-               else CELL_STYLE).update(cell_cfg)
-    show_data = data_cfg.get("show", False)
-    data_style = data_cfg.get("style", "scatter")
-    data_pc = (DATA_CONTOUR_STYLE if data_style == "contour"
-               else DATA_STYLE).update(data_cfg)
+    show_planes = plane_cfg.get("show", True)
+    plane_style = plane_cfg.get("style", "planes")
+    show_avg = avg_cfg.get("show", True)
+    avg_style = get_style(AVG_STYLE, avg_cfg)
+
+    obs_color = obs_cfg.get("color", OBS_STYLE["color"])
+    obs_arrowsize = obs_cfg.get("arrowsize", OBS_STYLE["arrowsize"])
+    obs_lw = obs_cfg.get("linewidth", OBS_STYLE["linewidth"])
+    pred_color = pred_cfg.get("color", PRED_STYLE["color"])
+    pred_arrowsize = pred_cfg.get("arrowsize", PRED_STYLE["arrowsize"])
+    pred_lw = pred_cfg.get("linewidth", PRED_STYLE["linewidth"])
+    plane_color = plane_cfg.get("color", PLANE_STYLE["color"])
+    plane_alpha = plane_cfg.get("alpha", PLANE_STYLE["alpha"])
+    plane_lw = plane_cfg.get("linewidth", PLANE_STYLE["linewidth"])
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
@@ -141,87 +130,82 @@ def run(cfg: dict, job_dir: Path) -> None:
     sub = model.extract(zone)
     log.info(f"  {sub.n_cells} cells in zone")
 
+    if "vtu" in out:
+        sub.save(out_dir / out["vtu"])
+
+    avg_stress = sub.avg_tensor("stress")
+
     # load fault datasets
-    all_strikes, all_dips, all_rakes = [], [], []
+    fault_datasets = {}
     for name, entry in cfg["data"].items():
         file_path = entry if isinstance(entry, str) else entry.get("file")
         sd = load_structural_csv((job_dir / file_path).resolve())
+        if not isinstance(sd, FaultData):
+            log.warning(f"  '{name}' has no rake column — skipping.")
+            continue
+        fault_datasets[name] = sd
 
-        log.info(f"  '{name}': {len(sd)} faults")
-        all_strikes.append(sd.planes[:, 0])
-        all_dips.append(sd.planes[:, 1])
-        all_rakes.append(sd.rakes)
-
-    strikes = np.concatenate(all_strikes)
-    dips = np.concatenate(all_dips)
-    rakes = np.concatenate(all_rakes)
-    log.info(f"  Total: {len(strikes)} faults for Kostrov summation")
-
-    # Kostrov tensor principals
-    K = kostrov_tensor(strikes, dips, rakes)
-    k_vecs = tensor.eigenvectors(K[None, :])[0]
-
-    # model tensor principals
-    axis_labels = _TENSOR_LABELS[which]
-    m_vals, m_vecs = sub.avg_principals(which)
-
-    # angular misfit between Kostrov and model axes
-    log.info(f"  Misfit between Kostrov and Model tensors ({which}): {m_vals}")
-
-    angles, pairs = axes_misfit(k_vecs, m_vecs)
-    for idx, (i, j) in enumerate(pairs):
-        log.info(f"  {_K_LOG[i]} <-> {axis_labels[j]}: {angles[idx]:.1f} deg")
+    if not fault_datasets:
+        raise ValueError("No fault datasets found. CSV files must have strike, dip, rake columns.")
 
     # figure
     fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
 
-    # cell-level model directions
-    if show_cell:
-        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
-        if cell_style == "contour":
-            stereo_axes_contour(ax, cell_vecs, cell_pc)
-        else:
-            stereo_axes(ax, cell_vecs, cell_pc)
+    # plot fault data
+    for name, fd in fault_datasets.items():
+        strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
 
-    # per-fault P/B/T axes via individual Kostrov dyads
-    if show_data:
-        dyads = np.array(
-            [kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)])
-        per_vecs = tensor.eigenvectors(dyads)
-        if data_style == "contour":
-            stereo_axes_contour(ax, per_vecs, data_pc)
-        else:
-            stereo_axes(ax, per_vecs, data_pc)
+        # fault planes or poles
+        if show_planes:
+            if plane_style == "planes":
+                stereo_plane(ax, strikes, dips, color=plane_color,
+                             alpha=plane_alpha, linewidth=plane_lw)
+            else:
+                stereo_pole(ax, strikes, dips, color=plane_color,
+                            marker="+", markersize=6, alpha=plane_alpha)
 
-    # Kostrov principal axes
-    stereo_axes(ax, k_vecs, k_style, labels=_K_LABELS)
+        # observed slip arrows
+        stereo_slip_arrow(ax, strikes, dips, rakes,
+                          color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw)
 
-    # model principal axes
-    stereo_axes(ax, m_vecs, m_style, labels=axis_labels)
+        # predicted slip arrows (resolved shear traction)
+        pred = resolved_rakes(avg_stress, strikes, dips)
+        stereo_slip_arrow(ax, strikes, dips, pred,
+                          color=pred_color, arrowsize=pred_arrowsize, linewidth=pred_lw)
+
+    # average principal directions
+    if show_avg:
+        _, vec = sub.avg_principals("stress")
+        stereo_axes(ax, vec, avg_style)
 
     # legend
-    sym = _TENSOR_SYMBOL[which]
     legend_elements = [
-        Line2D([0], [0], color=k_style.color, linewidth=0, marker="o", markersize=8,
-               label="Kostrov axes"),
-        Line2D([0], [0], color=m_style.color, linewidth=0, marker="o", markersize=8,
-               label=f"{sym} axes"),
-        Line2D([], [], color="k", linewidth=0, marker="o", markersize=6,
-               label=rf"$K_1$, {axis_labels[0]}"),
-        Line2D([], [], color="k", linewidth=0, marker="s", markersize=6,
-               label=rf"$K_2$, {axis_labels[1]}"),
-        Line2D([], [], color="k", linewidth=0, marker="v", markersize=6,
-               label=rf"$K_3$, {axis_labels[2]}"),
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=obs_color, lw=obs_lw, label="Observed slip"),
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=pred_color, lw=pred_lw, label="Predicted slip"),
     ]
-    ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(plot.get("title", "Kostrov analysis"), y=1.08)
+    if show_planes:
+        if plane_style == "planes":
+            legend_elements.append(
+                Line2D([0], [0], color=plane_color, linewidth=plane_lw,
+                       alpha=plane_alpha, label="Fault planes"))
+        else:
+            legend_elements.append(
+                Line2D([0], [0], color=plane_color, linewidth=0, marker="+",
+                       markersize=6, alpha=plane_alpha, label="Fault poles"))
+    if show_avg:
+        legend_elements.extend([
+            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="o", label=r"$\sigma_1$"),
+            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="s", label=r"$\sigma_2$"),
+            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="v", label=r"$\sigma_3$"),
+        ])
 
-    # save
-    if "vtu" in out:
-        sub.save(out_dir / out.get("vtu", "extract.vtu"))
-    fig.savefig(out_dir / out.get("figure", "kostrov.png"),
+    ax.legend(handles=legend_elements, fontsize=7)
+    ax.set_title(plot.get("title", "Resolved shear analysis"), y=1.08)
+    fig.savefig(out_dir / out.get("figure", "resolved_shear.png"),
                 dpi=plot.get("dpi", 200), bbox_inches="tight")
     plt.close(fig)
     log.info(f"Saved results: {out_dir}")

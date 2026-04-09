@@ -68,8 +68,8 @@ from matplotlib.lines import Line2D
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
 from fem2geo.plots import (
-    PlotConfig,
     MODEL_COLORS,
+    get_style,
     stereo_axes,
     stereo_axes_contour,
     stereo_pole,
@@ -81,10 +81,10 @@ log = logging.getLogger("fem2geoLogger")
 
 # Plot defaults
 
-AVG_STYLE = PlotConfig(color=MODEL_COLORS[0], markersize=8, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="grey", markersize=3, alpha=0.3)
-CONTOUR_STYLE = PlotConfig(color="grey", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(markersize=6, alpha=0.8, marker="+")
+AVG_STYLE = {"color": MODEL_COLORS[0], "markersize": 8, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "grey", "markersize": 3, "alpha": 0.3}
+CONTOUR_STYLE = {"color": "grey", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+DATA_STYLE = {"markersize": 6, "alpha": 0.8, "marker": "+"}
 
 
 # Main job
@@ -98,16 +98,15 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)
-    avg_style = AVG_STYLE.update(avg_cfg)
+    avg_style = get_style(AVG_STYLE, avg_cfg)
 
     cell_cfg = plot.get("cell_directions", {})
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(
-        cell_cfg
-    )
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
 
-    data_style = DATA_STYLE.update(plot.get("data", {}))
+    data_style = get_style(DATA_STYLE, plot.get("data", {}))
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
@@ -130,7 +129,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="o",
             label=r"$\sigma_1$",
@@ -138,7 +137,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="s",
             label=r"$\sigma_2$",
@@ -146,7 +145,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="v",
             label=r"$\sigma_3$",
@@ -177,7 +176,7 @@ def run(cfg: dict, job_dir: Path) -> None:
             fd.planes[:, 0],
             fd.planes[:, 1],
             label=f"{name}",
-            **data_style.update(color=color).kwargs(),
+            **get_style(data_style, color=color),
         )
         legend_elements.append(
             Line2D([0], [0], color=color, linewidth=0, marker="+", label=name)

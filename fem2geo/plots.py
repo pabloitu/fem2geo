@@ -1,5 +1,3 @@
-from dataclasses import dataclass, asdict
-
 import mplstereonet
 import numpy as np
 
@@ -18,34 +16,32 @@ MODEL_COLORS = [
 ]
 
 
-@dataclass
-class PlotConfig:
+def get_style(default, *overrides, drop=("show", "style"), **kw):
     """
-    Bag of matplotlib style parameters. Fields left as None are omitted
-    when passed to matplotlib, so the library defaults apply.
+    Merge style dicts into a matplotlib-ready kwargs dict.
+
+    Later overrides win over earlier ones. Keys listed in ``drop`` are
+    config-only flags (e.g. ``show``, ``style``) and are removed from
+    the result so they don't reach matplotlib.
+
+    Parameters
+    ----------
+    default : dict
+        Base style.
+    *overrides : dict
+        Successive override dicts (typically user config).
+    drop : tuple of str
+        Keys to strip from the result.
+    **kw
+        Final per-call overrides (e.g. ``marker="o"``).
     """
-    color:           str   = None
-    marker:          str   = None
-    markersize:      float = None
-    markeredgecolor: str   = None
-    alpha:           float = None
-    linewidth:       float = None
-    levels:          int   = None
-    sigma:           float = None
-
-    def update(self, overrides=None, **kw):
-        """Return a new PlotConfig with overrides applied."""
-        if isinstance(overrides, dict):
-            kw = {**overrides, **kw}
-        valid = {
-            k: v for k, v in kw.items()
-            if k in self.__dataclass_fields__ and v is not None
-        }
-        return PlotConfig(**{**asdict(self), **valid})
-
-    def kwargs(self):
-        """Return non-None fields as a dict for matplotlib."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
+    out = dict(default)
+    for o in overrides:
+        out.update(o)
+    out.update(kw)
+    for k in drop:
+        out.pop(k, None)
+    return out
 
 
 def stereo_field(
@@ -227,7 +223,7 @@ def stereo_axes(ax, vecs, style, labels=None, markers=("o", "s", "v")):
     vecs : numpy.ndarray
         Either (3, 3) for a single frame or (N, 3, 3) for N frames.
         Axes are stored as columns: ``vecs[..., :, i]`` is the i-th axis.
-    style : PlotConfig
+    style : dict
         Base style. Marker is overridden per axis.
     labels : tuple of str, optional
         Three labels for the legend.
@@ -240,8 +236,7 @@ def stereo_axes(ax, vecs, style, labels=None, markers=("o", "s", "v")):
     for i in range(3):
         p, a = line_enu2sphe(vecs[:, :, i])
         label = labels[i] if labels is not None else None
-        stereo_line(ax, p, a, label=label,
-                    **style.update(marker=markers[i]).kwargs())
+        stereo_line(ax, p, a, label=label, **{**style, "marker": markers[i]})
 
 
 def stereo_axes_contour(ax, vecs, style):
@@ -254,13 +249,12 @@ def stereo_axes_contour(ax, vecs, style):
     vecs : numpy.ndarray
         Either (3, 3) for a single frame or (N, 3, 3) for N frames.
         Axes are columns: ``vecs[..., :, i]`` is the i-th axis.
-    style : PlotConfig
+    style : dict
         Contour style (color, levels, sigma, linewidth).
     """
     vecs = np.asarray(vecs)
     if vecs.ndim == 2:
         vecs = vecs[None, :, :]
-    kw = style.kwargs()
     for i in range(3):
         p, a = line_enu2sphe(vecs[:, :, i])
-        stereo_contour(ax, p, a, **kw)
+        stereo_contour(ax, p, a, **style)
