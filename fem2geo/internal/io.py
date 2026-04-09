@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pyvista as pv
 
 from fem2geo.data import FractureData, FaultData, CatalogData
@@ -83,54 +84,43 @@ def load_catalog_csv(path, columns) -> CatalogData:
     if not path.exists():
         raise FileNotFoundError(f"Catalog file not found: {path}")
 
-    x_col, y_col, z_col = columns
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f)
-        fields = reader.fieldnames or []
-        for c in (x_col, y_col, z_col):
-            if c not in fields:
-                raise ValueError(
-                    f"Column '{c}' not found in {path}. Available: {fields}"
-                )
-        rows = list(reader)
-
-    if not rows:
+    df = pd.read_csv(path)
+    if df.empty:
         raise ValueError(f"Catalog file is empty: {path}")
 
-    x = _to_float_col(rows, x_col, path)
-    y = _to_float_col(rows, y_col, path)
-    z = _to_float_col(rows, z_col, path)
+    x_col, y_col, z_col = columns
+    for c in (x_col, y_col, z_col):
+        if c not in df.columns:
+            raise ValueError(
+                f"Column '{c}' not found in {path}. "
+                f"Available: {list(df.columns)}"
+            )
 
-    attrs = {}
-    dropped = []
-    for c in fields:
-        if c in (x_col, y_col, z_col):
-            continue
-        try:
-            attrs[c] = _to_float_col(rows, c, path)
-        except ValueError:
-            dropped.append(c)
-
+    numeric = df.apply(pd.to_numeric, errors="coerce")
+    dropped = [
+        c for c in df.columns
+        if numeric[c].isna().all() and not df[c].isna().all()
+    ]
     if dropped:
         log.warning(f"  dropped non-numeric columns: {dropped}")
 
+    coord_cols = (x_col, y_col, z_col)
+    attrs = {
+        c: numeric[c].to_numpy(dtype=float)
+        for c in df.columns
+        if c not in coord_cols and c not in dropped
+    }
+
     log.info(
-        f"Loaded catalog: {path} ({len(rows)} points, "
+        f"Loaded catalog: {path} ({len(df)} points, "
         f"{len(attrs)} numeric attrs)"
     )
-    return CatalogData(x=x, y=y, z=z, attrs=attrs)
-
-
-def _to_float_col(rows, name, path):
-    out = np.empty(len(rows), dtype=float)
-    for i, r in enumerate(rows):
-        v = r[name]
-        if v is None or v == "":
-            out[i] = np.nan
-        else:
-            out[i] = float(v)
-    return out
+    return CatalogData(
+        x=numeric[x_col].to_numpy(dtype=float),
+        y=numeric[y_col].to_numpy(dtype=float),
+        z=numeric[z_col].to_numpy(dtype=float),
+        attrs=attrs,
+    )
 
 
 def load_mesh(path) -> pv.DataSet:
