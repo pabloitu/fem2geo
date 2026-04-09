@@ -10,7 +10,7 @@ class TestRotation(unittest.TestCase):
     def test_tensor_rotation_preserves_invariants(self):
         T = np.array([[3, .2, -.1], [.2, 2, .3], [-.1, .3, 1.0]])
         ev0 = np.sort(np.linalg.eigvalsh(T))
-        for ax in (1, 2, 3):
+        for ax in (0, 1, 2):
             Tr = tm.rot_tensor(T, 67, ax)
             np.testing.assert_allclose(np.sort(np.linalg.eigvalsh(Tr)), ev0, atol=1e-9)
             self.assertAlmostEqual(np.trace(Tr), np.trace(T), places=9)
@@ -30,14 +30,14 @@ class TestResolvedRakes(unittest.TestCase):
 
     def test_isotropic_gives_nan(self):
         S = 5.0 * np.eye(3)
-        rakes = tm.resolved_rakes(S, [0, 30, 120], [10, 60, 85])
+        rakes = tm.resolved_rake(S, [0, 30, 120], [10, 60, 85])
         self.assertTrue(np.all(np.isnan(rakes)))
 
     def test_matches_scalar_resolved_shear(self):
         S = np.array([[4, .1, .2], [.1, 2, .3], [.2, .3, 1.0]])
         strikes = np.array([0, 30, 120, 270], dtype=float)
         dips = np.array([10, 60, 45, 85], dtype=float)
-        rakes = tm.resolved_rakes(S, strikes, dips)
+        rakes = tm.resolved_rake(S, strikes, dips)
         for i in range(len(strikes)):
             tau, tau_hat = tm.resolved_shear_enu(S, plane=[strikes[i], dips[i]])
             if tau < 1e-12:
@@ -96,7 +96,7 @@ class TestTendencies(unittest.TestCase):
         dips = np.array([30, 60], dtype=float)
         ts = tm.slip_tendency(S, strikes, dips)
         td = tm.dilation_tendency(S, strikes, dips)
-        tc = tm.combined_tendency(S, strikes, dips)
+        tc = tm.summarized_tendency(S, strikes, dips)
         np.testing.assert_allclose(tc, ts + td, atol=1e-12)
 
     def test_combined_bounded_02(self):
@@ -104,7 +104,7 @@ class TestTendencies(unittest.TestCase):
         rng = np.random.default_rng(7)
         strikes = rng.uniform(0, 360, 100)
         dips = rng.uniform(1, 89, 100)
-        tc = tm.combined_tendency(S, strikes, dips)
+        tc = tm.summarized_tendency(S, strikes, dips)
         self.assertTrue(np.all(tc >= 0))
         self.assertTrue(np.all(tc <= 2.0 + 1e-12))
 

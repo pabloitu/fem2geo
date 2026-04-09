@@ -87,7 +87,7 @@ from fem2geo.plots import (
     get_style, stereo_axes, stereo_pole, stereo_plane, stereo_slip_arrow,
 )
 from fem2geo.runner import resolve_output
-from fem2geo.utils.tensor import resolved_rakes
+from fem2geo.utils.tensor import resolved_rake
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -173,7 +173,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                           color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw)
 
         # predicted slip arrows (resolved shear traction)
-        pred = resolved_rakes(avg_stress, strikes, dips)
+        pred = resolved_rake(avg_stress, strikes, dips)
         stereo_slip_arrow(ax, strikes, dips, pred,
                           color=pred_color, arrowsize=pred_arrowsize, linewidth=pred_lw)
 

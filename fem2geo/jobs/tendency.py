@@ -78,7 +78,7 @@ from fem2geo.plots import (
     stereo_pole,
 )
 from fem2geo.runner import resolve_output
-from fem2geo.utils.tensor import slip_tendency, dilation_tendency, combined_tendency
+from fem2geo.utils.tensor import slip_tendency, dilation_tendency, summarized_tendency
 from fem2geo.utils.transform import grid_nodes, grid_centers
 
 log = logging.getLogger("fem2geoLogger")
@@ -106,7 +106,7 @@ _TITLES = {
 TENDENCY_FUNCTIONS = {
     "slip": slip_tendency,
     "dilation": dilation_tendency,
-    "combined": combined_tendency,
+    "combined": summarized_tendency,
 }
 
 
