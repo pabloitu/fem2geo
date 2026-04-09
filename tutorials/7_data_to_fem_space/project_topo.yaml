@@ -1,8 +1,8 @@
 job: project
 
 data:
-  file: ../data/topo_chile.tif
   raster:
+    file: ../data/topo_chile.tif
     z_band: 1
 
 src:

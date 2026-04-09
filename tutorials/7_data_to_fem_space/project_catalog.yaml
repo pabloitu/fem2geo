@@ -1,8 +1,8 @@
 job: project
 
 data:
-  file: ../data/catalog_interface.csv
   catalog:
+    file: ../data/catalog_interface.csv
     columns: [longitude, latitude, depth]
 
 src:

@@ -1,7 +1,8 @@
 job: project
 
 data:
-  file: ../data/slab_interface.vtu
+  mesh:
+    file: ../data/slab_interface.vtu
 
 src:
   crs: epsg:32719

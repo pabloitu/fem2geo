@@ -3,9 +3,9 @@ Job: project
 ============
 Project georeferenced data into a local cartesian model frame. The
 model frame is pinned to a real-world anchor point and optionally
-rotated around it. Dispatches on the input file extension: ``.csv``
-is treated as a point catalog, ``.vtp``/``.vtu``/``.vtk`` as a mesh,
-and ``.tif``/``.tiff`` as a GeoTIFF raster.
+rotated around it. The input kind is declared as a sub-block under
+``data:``: ``catalog`` for CSV point sets, ``mesh`` for VTK files,
+``raster`` for GeoTIFFs.
 
 For rasters, ``src.xy_units`` applies to the GeoTIFF's CRS (``deg``
 for lon/lat sources, ``m`` or ``km`` for projected) while
@@ -23,13 +23,15 @@ Config reference
 job: project
 
 data:
-  file: ../data/topo.vtp
-  # For catalogs, declare the format and its column mapping:
+  # Pick exactly one of mesh / catalog / raster.
+  mesh:
+    file: ../data/topo.vtu
   # catalog:
+  #   file: ../data/eq.csv
   #   columns: [longitude, latitude, depth]
-  # For GeoTIFF rasters, optionally pick a band to drive elevation:
   # raster:
-  #   z_band: 1          # omit for a flat grid positioned by the anchor
+  #   file: ../data/dem.tif
+  #   z_band: 1                     # omit for a flat grid
 
 src:
   crs: epsg:32719
@@ -77,34 +79,49 @@ from fem2geo.utils.projections import (
 
 log = logging.getLogger("fem2geoLogger")
 
-MESH_EXTS = {".vtp", ".vtu", ".vtk"}
-RASTER_EXTS = {".tif", ".tiff"}
-EXT_KIND = {
-    ".csv": "catalog",
-    **{e: "mesh" for e in MESH_EXTS},
-    **{e: "raster" for e in RASTER_EXTS},
+KIND_EXTS = {
+    "catalog": {".csv"},
+    "mesh":    {".vtp", ".vtu", ".vtk"},
+    "raster":  {".tif", ".tiff"},
 }
+
+
+def require(d, prefix, *keys):
+    """Raise ValueError if any of `keys` is missing from `d`."""
+    for k in keys:
+        if k not in d:
+            raise ValueError(f"{prefix}.{k} is required.")
 
 
 def run(cfg, job_dir):
     _, _, _, _, out = parse_config(cfg, job_dir)
     out_dir = out["dir"]
 
-    if "projector" in cfg:
-        raise ValueError(
-            "Legacy 'projector:' block is no longer supported. "
-            "Use 'src:' and 'dst:' blocks instead — see the job docstring."
-        )
-    if "input" in cfg and "data" not in cfg:
-        raise ValueError(
-            "Legacy 'input:' block is no longer supported. Rename to 'data:'."
-        )
+    # src
+    src = cfg.get("src", {})
+    require(src, "src", "crs", "xy_units", "z_units", "z_positive")
+    bbox = src.get("bbox")
+    if bbox is not None and not isinstance(bbox, dict):
+        raise ValueError("src.bbox must be a mapping with lon/lat/depth_km keys.")
 
-    src = parse_src(cfg.get("src", {}))
-    dst = parse_dst(cfg.get("dst", {}), src)
-    path, kind, cat_cols, z_band = parse_data(cfg.get("data", {}), job_dir)
+    # dst
+    dst = cfg.get("dst", {})
+    require(dst, "dst", "units", "anchor")
+    anchor = dst["anchor"]
+    require(anchor, "dst.anchor", "data", "model")
+    require(anchor["data"], "dst.anchor.data", "depth_km")
+    model = anchor["model"]
+    if len(model) != 3:
+        raise ValueError("dst.anchor.model must be [x, y, z].")
 
-    lon0, lat0 = dst["anchor_lon"], dst["anchor_lat"]
+    lon0, lat0 = parse_anchor_data(anchor["data"], src)
+    depth_km = float(anchor["data"]["depth_km"])
+    rotation_deg = anchor.get("rotation_deg", 0.0) or None
+
+    # data
+    path, kind, sub = parse_data(cfg.get("data", {}), job_dir)
+
+    # projector
     aeqd = CRS.from_proj4(
         f"+proj=aeqd +lat_0={lat0} +lon_0={lon0} "
         f"+x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
@@ -114,15 +131,14 @@ def run(cfg, job_dir):
         src_xy_units=src["xy_units"], dst_xy_units=dst["units"],
         src_z_units=src["z_units"], dst_z_units=dst["units"],
         src_z_positive=src["z_positive"], dst_z_positive="up",
-        anchor_geo=(lon0, lat0, dst["anchor_depth_km"]),
-        anchor_local=dst["anchor_local"],
-        rotation_deg=dst["rotation_deg"] or None,
+        anchor_geo=(lon0, lat0, depth_km),
+        anchor_local=tuple(model),
+        rotation_deg=rotation_deg,
     )
 
-    bbox = src.get("bbox")
-
+    # dispatch
     if kind == "catalog":
-        cat = load_catalog_csv(path, columns=cat_cols)
+        cat = load_catalog_csv(path, columns=sub["columns"])
         log.info(f"  loaded {len(cat)} points")
         if bbox:
             cat = filter_catalog(cat, bbox, src)
@@ -146,7 +162,7 @@ def run(cfg, job_dir):
 
     elif kind == "raster":
         window = raster_window(path, bbox) if bbox else None
-        poly = load_raster(path, z_band=z_band, window=window)
+        poly = load_raster(path, z_band=sub.get("z_band"), window=window)
         result = poly.copy()
         result.points = proj.transform_points(poly.points)
 
@@ -156,55 +172,6 @@ def run(cfg, job_dir):
 
 
 # config parsing
-
-def parse_src(s):
-    for k in ("crs", "xy_units", "z_units", "z_positive"):
-        if k not in s:
-            raise ValueError(f"src.{k} is required.")
-    bbox = s.get("bbox")
-    if bbox is not None and not isinstance(bbox, dict):
-        raise ValueError("src.bbox must be a mapping with lon/lat/depth_km keys.")
-    return {
-        "crs": s["crs"],
-        "xy_units": s["xy_units"],
-        "z_units": s["z_units"],
-        "z_positive": s["z_positive"],
-        "bbox": bbox,
-    }
-
-
-def parse_dst(d, src):
-    if "units" not in d:
-        raise ValueError("dst.units is required ('m' or 'km').")
-    if "anchor" not in d:
-        raise ValueError(
-            "dst.anchor is required. Pure CRS reprojection is not yet "
-            "supported; specify an anchor with data and model keys."
-        )
-
-    a = d["anchor"]
-    if "data" not in a or "model" not in a:
-        raise ValueError("dst.anchor must have both 'data' and 'model' keys.")
-
-    lon, lat = parse_anchor_data(a["data"], src)
-
-    if "depth_km" not in a["data"]:
-        raise ValueError("dst.anchor.data.depth_km is required.")
-    depth_km = float(a["data"]["depth_km"])
-
-    model = a["model"]
-    if len(model) != 3:
-        raise ValueError("dst.anchor.model must be [x, y, z].")
-
-    return {
-        "units": d["units"],
-        "anchor_lon": lon,
-        "anchor_lat": lat,
-        "anchor_depth_km": depth_km,
-        "anchor_local": tuple(model),
-        "rotation_deg": a.get("rotation_deg", 0.0),
-    }
-
 
 def parse_anchor_data(ad, src):
     has_lonlat = "lon" in ad or "lat" in ad
@@ -220,12 +187,10 @@ def parse_anchor_data(ad, src):
         )
 
     if has_lonlat:
-        if "lon" not in ad or "lat" not in ad:
-            raise ValueError("dst.anchor.data needs both lon and lat.")
+        require(ad, "dst.anchor.data", "lon", "lat")
         return float(ad["lon"]), float(ad["lat"])
 
-    if "x" not in ad or "y" not in ad:
-        raise ValueError("dst.anchor.data needs both x and y.")
+    require(ad, "dst.anchor.data", "x", "y")
     if CRS.from_user_input(src["crs"]).is_geographic:
         raise ValueError(
             "dst.anchor.data.x/y cannot be used with a geographic src.crs; "
@@ -238,53 +203,51 @@ def parse_anchor_data(ad, src):
 
 
 def parse_data(d, job_dir):
-    if "file" not in d:
-        raise ValueError("data.file is required.")
-    path = (job_dir / d["file"]).resolve()
+    declared = [k for k in KIND_EXTS if k in d]
+    if not declared:
+        raise ValueError(
+            f"data must declare one of {sorted(KIND_EXTS)} as a sub-block."
+        )
+    if len(declared) > 1:
+        raise ValueError(
+            f"data has multiple sub-blocks ({declared}); pick one."
+        )
+    kind = declared[0]
+    sub = d[kind] or {}
+
+    require(sub, f"data.{kind}", "file")
+    path = (job_dir / sub["file"]).resolve()
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {path}")
 
     ext = path.suffix.lower()
-    if ext not in EXT_KIND:
+    if ext not in KIND_EXTS[kind]:
         raise ValueError(
-            f"Unsupported input extension '{ext}'. "
-            f"Use one of: {sorted(EXT_KIND)}."
-        )
-    kind = EXT_KIND[ext]
-
-    declared = None
-    for k in ("catalog", "mesh", "raster"):
-        if k in d:
-            if declared is not None:
-                raise ValueError(
-                    f"data block has multiple format sub-blocks "
-                    f"({declared}, {k}); pick one."
-                )
-            declared = k
-    if declared is not None and declared != kind:
-        raise ValueError(
-            f"data.{declared} declared, but file extension '{ext}' is a "
-            f"{kind}. Declare data.{kind} instead (or remove the sub-block)."
+            f"data.{kind}.file has extension '{ext}', expected one of "
+            f"{sorted(KIND_EXTS[kind])}."
         )
 
-    cat_cols = None
-    z_band = None
     if kind == "catalog":
-        cols = (d.get("catalog") or {}).get("columns")
-        if not cols or len(cols) != 3:
+        require(sub, "data.catalog", "columns")
+        cols = sub["columns"]
+        if len(cols) != 3:
             raise ValueError(
                 "data.catalog.columns must be a length-3 list "
                 "[x_col, y_col, z_col]."
             )
-        cat_cols = tuple(cols)
+        sub = dict(sub)
+        sub["columns"] = tuple(cols)
+
     elif kind == "raster":
-        z_band = (d.get("raster") or {}).get("z_band")
+        z_band = sub.get("z_band")
         if z_band is not None:
             z_band = int(z_band)
             if z_band < 1:
                 raise ValueError("data.raster.z_band must be >= 1 (1-indexed).")
+            sub = dict(sub)
+            sub["z_band"] = z_band
 
-    return path, kind, cat_cols, z_band
+    return path, kind, sub
 
 
 # pipeline helpers

@@ -16,14 +16,13 @@ frame (or a model with a different real-world CRS). Every input is translated fr
 Input data types
 ----------------
 
-The input type is auto-detected from the file extension:
+The input kind is declared as a sub-block under ``data:``:
 
-- ``.csv`` is treated as a point catalog
-- ``.vtp`` / ``.vtu`` / ``.vtk`` as a surface or volumetric mesh
-- ``.tif`` / ``.tiff`` as a GeoTIFF raster
+- ``catalog`` for ``.csv`` point sets
+- ``mesh`` for ``.vtp`` / ``.vtu`` / ``.vtk`` surface or volumetric meshes
+- ``raster`` for ``.tif`` / ``.tiff`` GeoTIFF rasters
 
-This tutorial walks through three configurations from
-``tutorials/7_data_to_fem_space/``, one for each input type.
+This tutorial walks through three configurations from ``tutorials/7_data_to_fem_space/``, one for each input type.
 
 Projecting a catalog
 --------------------
@@ -68,8 +67,7 @@ Projecting a mesh
 -----------------
 
 Surface meshes (e.g., slab interfaces) are read directly
-from VTK formats. No format sub-block is needed — the file extension is
-enough:
+from VTK formats. The ``mesh:`` sub-block carries the file path:
 
 .. literalinclude:: ../../../tutorials/7_data_to_fem_space/project_slab.yaml
    :language: yaml
@@ -143,32 +141,35 @@ write the result*.
 The ``data`` block
 ^^^^^^^^^^^^^^^^^^
 
-.. code-block:: yaml
-
-   data:
-     file: path/to/input.vtp
-
-The ``file`` path is the only required key. For catalogs, add a
-``catalog:`` sub-block declaring the coordinate columns:
+Pick exactly one of ``catalog``, ``mesh``, or ``raster`` as a sub-block.
+Each carries its own ``file`` and any kind-specific options.
 
 .. code-block:: yaml
 
    data:
-     file: data/cat.csv
+     mesh:
+       file: path/to/input.vtu
+
+For catalogs, declare the coordinate columns:
+
+.. code-block:: yaml
+
+   data:
      catalog:
+       file: data/cat.csv
        columns: [longitude, latitude, depth]
 
-For rasters, add an optional ``raster:`` sub-block to pick the elevation
-band:
+For rasters, optionally pick the elevation band:
 
 .. code-block:: yaml
 
    data:
-     file: data/dem.tif
      raster:
+       file: data/dem.tif
        z_band: 1
 
-Mesh inputs need no sub-block.
+The file extension must match the declared kind: ``.csv`` for catalog,
+``.vtp``/``.vtu``/``.vtk`` for mesh, ``.tif``/``.tiff`` for raster.
 
 The ``src`` block
 ^^^^^^^^^^^^^^^^^
