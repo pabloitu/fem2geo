@@ -55,9 +55,7 @@ def parse_config(cfg: dict, job_dir: Path) -> tuple:
     """
     from fem2geo.internal.schema import ModelSchema
 
-    schema = ModelSchema.builtin(
-        cfg.get("schema", "adeli"), units=cfg.get("units")
-    )
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
     zone = cfg.get("zone", {})
     data = cfg.get("data", {})
     plot = cfg.get("plot", {})

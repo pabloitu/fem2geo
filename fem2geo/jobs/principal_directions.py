@@ -10,8 +10,6 @@ Config reference
 ----------------
 job: principal_directions
 schema: adeli
-units:
-  pressure: Pa
 
 model: path/to/model.vtk
 # OR

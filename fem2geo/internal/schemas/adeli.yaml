@@ -1,11 +1,5 @@
 solver: adeli
 
-units:
-  pressure:    MPa
-  distance:    m
-  velocity:    cm/a
-  time:        Ma
-
 tensors:
   stress:
     components:
@@ -15,12 +9,11 @@ tensors:
       xy: "Stress_xy(MPa)"
       yz: "Stress_yz(MPa)"
       zx: "Stress_zx(MPa)"
-    category: pressure
 
 fields:
   # Principal stress magnitudes (deviatoric)
-  val_s1: { field: "DevStress_1(MPa)", category: pressure }
-  val_s3: { field: "DevStress_3(MPa)", category: pressure }
+  val_s1: { field: "DevStress_1(MPa)" }
+  val_s3: { field: "DevStress_3(MPa)" }
 
   # Principal stress directions (ENU unit vectors)
   dir_s1: { field: "dir_DevStress_1" }
@@ -28,14 +21,14 @@ fields:
   dir_s3: { field: "dir_DevStress_3" }
 
   # Kinematics
-  u: { field: "Displacement(m)", category: distance }
-  v: { field: "Velocity(cm/a)",  category: velocity }
-  t: { field: "TIME(Ma)",        category: time     }
+  u: { field: "Displacement(m)" }
+  v: { field: "Velocity(cm/a)" }
+  t: { field: "TIME(Ma)" }
 
   # Strain invariants
   i1_strain:     { field: "I1_(strain)(-)" }
   j2_strain:     { field: "J2_(strain)(-)" }
-  j2_stress:     { field: "J2_(stress)(MPa)", category: pressure }
+  j2_stress:     { field: "J2_(stress)(MPa)" }
   plastic_eff:   { field: "Eff._plastic_strain(-)" }
   plastic_vol:   { field: "Vol._plastic_strain(-)" }
   plastic_yield: { field: "jplas(-)" }

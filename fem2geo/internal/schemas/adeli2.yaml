@@ -7,23 +7,21 @@ units:
   temperature:  C
   viscosity:    Pa.s
   strain_rate:  1/s
-  heat_flux:    mW/m2
+  heat_flux:    mW/m2solver: adeli2
 
 tensors:
   stress:
     voigt6: "stresses_(Pa)"
-    category: pressure
   strain:
     voigt6: "strains_(-)"
   strain_rate:
     voigt6: "strain_rates_(1/s)"
-    category: strain_rate
 
 fields:
   # Deviatoric principal stress magnitudes
-  val_s1: { field: "devsigma1_(Pa)", category: pressure }
-  val_s2: { field: "devsigma2_(Pa)", category: pressure }
-  val_s3: { field: "devsigma3_(Pa)", category: pressure }
+  val_s1: { field: "devsigma1_(Pa)" }
+  val_s2: { field: "devsigma2_(Pa)" }
+  val_s3: { field: "devsigma3_(Pa)" }
 
   # Principal stress directions (ENU unit vectors)
   dir_s1: { field: "dir_devsigma1_(-)" }
@@ -31,14 +29,14 @@ fields:
   dir_s3: { field: "dir_devsigma3_(-)" }
 
   # Scalar stress
-  mean_stress: { field: "mean_stress_(Pa)",  category: pressure }
-  j2_stress:   { field: "Eqv(stress)_(Pa)",  category: pressure }
+  mean_stress: { field: "mean_stress_(Pa)" }
+  j2_stress:   { field: "Eqv(stress)_(Pa)" }
 
   # Scalar strain
-  j2_strain:     { field: "Eqv(strain)_(-)" }
-  i1_strain:     { field: "vol_strain_(-)" }
-  j2_strain_rate: { field: "Eqv(strainRate)_(1/s)", category: strain_rate }
-  i1_strain_rate: { field: "vol_strainRate_(1/s)",   category: strain_rate }
+  j2_strain:      { field: "Eqv(strain)_(-)" }
+  i1_strain:      { field: "vol_strain_(-)" }
+  j2_strain_rate: { field: "Eqv(strainRate)_(1/s)" }
+  i1_strain_rate: { field: "vol_strainRate_(1/s)" }
 
   # Plasticity
   plastic_eff:  { field: "Eff_plastic_strain_(-)" }
@@ -47,16 +45,16 @@ fields:
 
   # Rheology
   threshold_ratio: { field: "threshold_ratio_(-)" }
-  viscosity:       { field: "Eff_viscosity_(Pa.s)", category: viscosity }
+  viscosity:       { field: "Eff_viscosity_(Pa.s)" }
 
   # Fluid flow
-  darcy_vel: { field: "Darcy_Vel_(m/s)",   category: velocity }
-  fluid_pressure: { field: "fluid_pressure_(Pa)", category: pressure }
+  darcy_vel:      { field: "Darcy_Vel_(m/s)" }
+  fluid_pressure: { field: "fluid_pressure_(Pa)" }
 
   # Kinematics
-  v: { field: "velocity_(m/s)",   category: velocity }
-  u: { field: "displacement_(m)", category: distance }
+  v: { field: "velocity_(m/s)" }
+  u: { field: "displacement_(m)" }
 
   # Thermal
-  temperature:    { field: "temperature_(C)",     category: temperature }
-  heat_flux: { field: "Heat_flux_(mW/m2)", category: heat_flux }
+  temperature: { field: "temperature_(C)" }
+  heat_flux:   { field: "Heat_flux_(mW/m2)" }

@@ -28,8 +28,6 @@ Config reference
 ----------------
 job: resolved_shear
 schema: adeli                       # built-in schema name (default: adeli)
-units:                              # optional category-level unit overrides
-  pressure: Pa
 
 model: path/to/model.vtu            # relative to this config file
 
