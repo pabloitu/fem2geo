@@ -53,13 +53,13 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, MODEL_COLORS, stereo_line, stereo_contour
+from fem2geo.plots import PlotConfig, MODEL_COLORS, stereo_axes, stereo_axes_contour
 from fem2geo.runner import parse_config
-from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -110,39 +110,20 @@ def run(cfg: dict, job_dir: Path) -> None:
 
         log.info("Processing results...")
         if cell_show:
-
-            # get plunge and azimuth for all principal axes
-            p1, a1 = line_enu2sphe(model.dir_s1)
-            p2, a2 = line_enu2sphe(model.dir_s2)
-            p3, a3 = line_enu2sphe(model.dir_s3)
-
-            # update per-model color
+            cell_vecs = np.stack(
+                [model.dir_s1, model.dir_s2, model.dir_s3], axis=-1
+            )
             cpc = cell_pc.update(color=color)
-
             if cell_style == "contour":
-                # plot with the cpc keyword arguments (expanded with **)
-                stereo_contour(ax, p1, a1, **cpc.kwargs())
-                stereo_contour(ax, p2, a2, **cpc.kwargs())
-                stereo_contour(ax, p3, a3, **cpc.kwargs())
+                stereo_axes_contour(ax, cell_vecs, cpc)
             else:
-                stereo_line(ax, p1, a1, **cpc.update(marker="o").kwargs())
-                stereo_line(ax, p2, a2, **cpc.update(marker="s").kwargs())
-                stereo_line(ax, p3, a3, **cpc.update(marker="v").kwargs())
+                stereo_axes(ax, cell_vecs, cpc)
 
         if avg_show:
-
-            # Get principal directions from the average of the model extraction
             _, vec = model.avg_principals()
-
             label = name if len(models) > 1 else None
-            p1, a1 = line_enu2sphe(vec[:, 0])
-            p2, a2 = line_enu2sphe(vec[:, 1])
-            p3, a3 = line_enu2sphe(vec[:, 2])
-
             apc = avg_pc.update(color=color)
-            stereo_line(ax, p1, a1, label=label, **apc.update(marker="o").kwargs())
-            stereo_line(ax, p2, a2, **apc.update(marker="s").kwargs())
-            stereo_line(ax, p3, a3, **apc.update(marker="v").kwargs())
+            stereo_axes(ax, vec, apc, labels=(label, None, None))
 
         if len(models) > 1:
             legend.append(Patch(facecolor=color, edgecolor="k", label=name))

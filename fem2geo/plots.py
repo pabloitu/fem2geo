@@ -3,7 +3,7 @@ from dataclasses import dataclass, asdict
 import mplstereonet
 import numpy as np
 
-from fem2geo.utils.transform import line_rake2sphe
+from fem2geo.utils.transform import line_enu2sphe, line_rake2sphe
 
 
 MODEL_COLORS = [
@@ -215,3 +215,52 @@ def stereo_contour(
         plunge, azimuth, measurement="lines", colors=color,
         levels=levels, sigma=sigma, linewidths=linewidth, **kwargs,
     )
+
+
+def stereo_axes(ax, vecs, style, labels=None, markers=("o", "s", "v")):
+    """
+    Plot a 3-axis frame on a stereonet as line markers.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    vecs : numpy.ndarray
+        Either (3, 3) for a single frame or (N, 3, 3) for N frames.
+        Axes are stored as columns: ``vecs[..., :, i]`` is the i-th axis.
+    style : PlotConfig
+        Base style. Marker is overridden per axis.
+    labels : tuple of str, optional
+        Three labels for the legend.
+    markers : tuple of str
+        Markers for axes 1, 2, 3. Defaults to circle, square, triangle.
+    """
+    vecs = np.asarray(vecs)
+    if vecs.ndim == 2:
+        vecs = vecs[None, :, :]
+    for i in range(3):
+        p, a = line_enu2sphe(vecs[:, :, i])
+        label = labels[i] if labels is not None else None
+        stereo_line(ax, p, a, label=label,
+                    **style.update(marker=markers[i]).kwargs())
+
+
+def stereo_axes_contour(ax, vecs, style):
+    """
+    Plot a 3-axis frame on a stereonet as density contours.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    vecs : numpy.ndarray
+        Either (3, 3) for a single frame or (N, 3, 3) for N frames.
+        Axes are columns: ``vecs[..., :, i]`` is the i-th axis.
+    style : PlotConfig
+        Contour style (color, levels, sigma, linewidth).
+    """
+    vecs = np.asarray(vecs)
+    if vecs.ndim == 2:
+        vecs = vecs[None, :, :]
+    kw = style.kwargs()
+    for i in range(3):
+        p, a = line_enu2sphe(vecs[:, :, i])
+        stereo_contour(ax, p, a, **kw)

@@ -62,6 +62,7 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 
 from fem2geo.internal.io import load_structural_csv
@@ -69,12 +70,11 @@ from fem2geo.model import Model
 from fem2geo.plots import (
     PlotConfig,
     MODEL_COLORS,
-    stereo_line,
+    stereo_axes,
+    stereo_axes_contour,
     stereo_pole,
-    stereo_contour,
 )
 from fem2geo.runner import parse_config
-from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -155,33 +155,18 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell directions
     if show_cell:
-        p1, a1 = line_enu2sphe(sub.dir_s1)
-        p2, a2 = line_enu2sphe(sub.dir_s2)
-        p3, a3 = line_enu2sphe(sub.dir_s3)
+        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
         if cell_style == "contour":
-            kw = cell_pc.kwargs()
-            stereo_contour(ax, p1, a1, **kw)
-            stereo_contour(ax, p2, a2, **kw)
-            stereo_contour(ax, p3, a3, **kw)
+            stereo_axes_contour(ax, cell_vecs, cell_pc)
         else:
-            stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
-            stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
-            stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
+            stereo_axes(ax, cell_vecs, cell_pc)
 
     # average principal directions
     if show_avg:
         _, vec = sub.avg_principals("stress")
-        p1, a1 = line_enu2sphe(vec[:, 0])
-        p2, a2 = line_enu2sphe(vec[:, 1])
-        p3, a3 = line_enu2sphe(vec[:, 2])
-        stereo_line(
-            ax, p1, a1, label=r"$\sigma_1$", **avg_style.update(marker="o").kwargs()
-        )
-        stereo_line(
-            ax, p2, a2, label=r"$\sigma_2$", **avg_style.update(marker="s").kwargs()
-        )
-        stereo_line(
-            ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs()
+        stereo_axes(
+            ax, vec, avg_style,
+            labels=(r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$"),
         )
 
     # fracture datasets — colors start at MODEL_COLORS[1] to avoid clashing with avg

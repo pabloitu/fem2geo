@@ -77,11 +77,10 @@ from matplotlib.lines import Line2D
 from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, stereo_line, stereo_contour
+from fem2geo.plots import PlotConfig, stereo_axes, stereo_axes_contour
 from fem2geo.runner import parse_config
 from fem2geo.utils import tensor
 from fem2geo.utils.tensor import kostrov_tensor, axes_misfit
-from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -180,48 +179,27 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell-level model directions
     if show_cell:
-        p1, a1 = line_enu2sphe(sub.dir_s1)
-        p2, a2 = line_enu2sphe(sub.dir_s2)
-        p3, a3 = line_enu2sphe(sub.dir_s3)
+        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
         if cell_style == "contour":
-            kw = cell_pc.kwargs()
-            stereo_contour(ax, p1, a1, **kw)
-            stereo_contour(ax, p2, a2, **kw)
-            stereo_contour(ax, p3, a3, **kw)
+            stereo_axes_contour(ax, cell_vecs, cell_pc)
         else:
-            stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
-            stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
-            stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
+            stereo_axes(ax, cell_vecs, cell_pc)
 
     # per-fault P/B/T axes via individual Kostrov dyads
     if show_data:
         dyads = np.array(
             [kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)])
         per_vecs = tensor.eigenvectors(dyads)
-        p_p, p_a = line_enu2sphe(per_vecs[:, :, 0])
-        b_p, b_a = line_enu2sphe(per_vecs[:, :, 1])
-        t_p, t_a = line_enu2sphe(per_vecs[:, :, 2])
         if data_style == "contour":
-            kw = data_pc.kwargs()
-            stereo_contour(ax, p_p, p_a, **kw)
-            stereo_contour(ax, b_p, b_a, **kw)
-            stereo_contour(ax, t_p, t_a, **kw)
+            stereo_axes_contour(ax, per_vecs, data_pc)
         else:
-            stereo_line(ax, p_p, p_a, **data_pc.update(marker="o").kwargs())
-            stereo_line(ax, b_p, b_a, **data_pc.update(marker="s").kwargs())
-            stereo_line(ax, t_p, t_a, **data_pc.update(marker="v").kwargs())
+            stereo_axes(ax, per_vecs, data_pc)
 
     # Kostrov principal axes
-    for i, marker in enumerate(["o", "s", "v"]):
-        p, a = line_enu2sphe(k_vecs[:, i])
-        stereo_line(ax, p, a, label=_K_LABELS[i],
-                    **k_style.update(marker=marker).kwargs())
+    stereo_axes(ax, k_vecs, k_style, labels=_K_LABELS)
 
     # model principal axes
-    for i, marker in enumerate(["o", "s", "v"]):
-        p, a = line_enu2sphe(m_vecs[:, i])
-        stereo_line(ax, p, a, label=axis_labels[i],
-                    **m_style.update(marker=marker).kwargs())
+    stereo_axes(ax, m_vecs, m_style, labels=axis_labels)
 
     # legend
     sym = _TENSOR_SYMBOL[which]
