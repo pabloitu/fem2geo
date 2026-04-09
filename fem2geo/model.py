@@ -16,8 +16,7 @@ class Model:
     Interface to a FEM/BEM model for geomechanical post-processing.
 
     Wraps a mesh loaded from VTK/VTU files and provides named access to stress,
-    strain, kinematic, and scalar fields in ENU coordinates. Fields are lazy-loaded
-    and cached on first access.
+    strain, kinematic, and scalar fields in ENU coordinates.
 
     Parameters
     ----------
@@ -104,8 +103,7 @@ class Model:
         path : str or Path
             Path to the mesh file.
         schema : ModelSchema or str
-            Schema instance or name of a built-in schema (e.g. `"adeli"``,
-             ``"adeli2"``).
+            Schema instance or name of built-in schema (e.g. `"adeli"``, ``"adeli2"``).
 
         Returns
         -------
@@ -218,7 +216,7 @@ class Model:
         return self.grid.number_of_cells
 
     @cached_property
-    def volumes(self) -> np.ndarray:
+    def cell_volumes(self) -> np.ndarray:
         """Cell volumes, shape (N,)."""
         return self.grid.compute_cell_sizes().cell_data["Volume"]
 
@@ -275,7 +273,7 @@ class Model:
         Plastic strain tensor, shape (N, 3, 3).
 
         Loaded from schema if available. Otherwise, reconstructed from
-        ``plastic_eff`` and ``plastic_vol`` assuming isotropic flow rules).
+        ``plastic_eff`` and ``plastic_vol`` assuming isotropic flow rules.
         """
         if "strain_plastic" in self.schema.tensors:
             try:
@@ -356,7 +354,6 @@ class Model:
             return self.get("dir_s3")
         else:
             return self.eigenvectors("stress")[:, :, 0]
-
 
     # eigendecomposition
 
@@ -499,8 +496,12 @@ class Model:
     # averages
 
     def avg_tensor(self, name: str) -> np.ndarray:
-        """
-        Volume-weighted average of a tensor field.
+        r"""
+        Cell-volume-weighted average of a tensor field.
+
+        .. math::
+
+           \bar{T}_{ij} = \frac{\sum_c V_c\, T_{ij}^{(c)}}{\sum_c V_c}
 
         Parameters
         ----------
@@ -515,13 +516,15 @@ class Model:
         numpy.ndarray, shape (3, 3)
             Symmetric average tensor.
         """
+
         t = getattr(self, name)
-        w = self.volumes
-        return np.einsum("ijk,i->jk", t, w) / w.sum()
+        w = self.cell_volumes
+        avg = np.einsum("ijk,i->jk", t, w) / w.sum()
+        return 0.5 * (avg + avg.T)
 
     def avg_principals(self, name: str = "stress") -> tuple:
         """
-        Eigendecompose the volume-weighted average of a tensor field.
+        Eigenvectors of the the volume-weighted average of a tensor field.
 
         Parameters
         ----------
