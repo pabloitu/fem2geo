@@ -17,47 +17,41 @@ _FAULTS_COLS = {"strike", "dip", "rake"}
 
 
 def load_structural_csv(path) -> FractureData | FaultData:
-    """
-    Read structural measurements from a CSV file.
+    """Read structural measurements from a CSV file.
 
-    Column matching is case-insensitive. Files with strike/dip/rake
-    columns produce FaultData; strike/dip only gives FractureData.
+    Files with strike/dip/rake columns produce FaultData; strike/dip only gives
+    FractureData.
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Structural data file not found: {path}")
 
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f)
-        cols = {name.strip().lower() for name in reader.fieldnames}
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip().str.lower()
+    cols = set(df.columns)
 
-        if _FAULTS_COLS <= cols:
-            kind = "faults"
-        elif _PLANES_COLS <= cols:
-            kind = "fractures"
-        else:
-            raise ValueError(
-                f"Unrecognised CSV columns: {reader.fieldnames}. "
-                f"Expected: {sorted(_FAULTS_COLS)} or {sorted(_PLANES_COLS)}."
-            )
+    if _FAULTS_COLS <= cols:
+        kind = "faults"
+    elif _PLANES_COLS <= cols:
+        kind = "fractures"
+    else:
+        raise ValueError(
+            f"Unrecognised CSV columns: {list(df.columns)}. "
+            f"Expected: {sorted(_FAULTS_COLS)} or {sorted(_PLANES_COLS)}."
+        )
 
-        col_map = {name.strip().lower(): name.strip() for name in reader.fieldnames}
-        rows = list(reader)
-
-    if not rows:
+    if df.empty:
         raise ValueError(f"Structural data file is empty: {path}")
 
-    strikes = np.array([float(r[col_map["strike"]]) for r in rows])
-    dips    = np.array([float(r[col_map["dip"]])    for r in rows])
-    planes  = np.column_stack([strikes, dips])
+    planes = df[["strike", "dip"]].to_numpy(dtype=float)
 
     if kind == "faults":
-        rakes = np.array([float(r[col_map["rake"]]) for r in rows])
+        rakes = df["rake"].to_numpy(dtype=float)
         data = FaultData(planes=planes, rakes=rakes)
     else:
         data = FractureData(planes=planes)
 
-    log.info(f"Loaded structural data: {path} ({kind}, {len(rows)} measurements)")
+    log.info(f"Loaded structural data: {path} ({kind}, {len(df)} measurements)")
     return data
 
 
@@ -65,9 +59,9 @@ def load_catalog_csv(path, columns) -> CatalogData:
     """
     Read a point catalog from a CSV file.
 
-    The three coordinate columns become x, y, z; remaining numeric
-    columns become attrs. Non-numeric columns are dropped with a
-    warning. Empty cells in numeric columns are read as NaN.
+    The three coordinate columns become x, y, z; remaining numeric columns become
+    attrs. Non-numeric columns are dropped with a warning. Empty cells in numeric
+    columns are read as NaN.
 
     Parameters
     ----------
@@ -92,14 +86,12 @@ def load_catalog_csv(path, columns) -> CatalogData:
     for c in (x_col, y_col, z_col):
         if c not in df.columns:
             raise ValueError(
-                f"Column '{c}' not found in {path}. "
-                f"Available: {list(df.columns)}"
+                f"Column '{c}' not found in {path}. " f"Available: {list(df.columns)}"
             )
 
     numeric = df.apply(pd.to_numeric, errors="coerce")
     dropped = [
-        c for c in df.columns
-        if numeric[c].isna().all() and not df[c].isna().all()
+        c for c in df.columns if numeric[c].isna().all() and not df[c].isna().all()
     ]
     if dropped:
         log.warning(f"  dropped non-numeric columns: {dropped}")
@@ -112,8 +104,7 @@ def load_catalog_csv(path, columns) -> CatalogData:
     }
 
     log.info(
-        f"Loaded catalog: {path} ({len(df)} points, "
-        f"{len(attrs)} numeric attrs)"
+        f"Loaded catalog: {path} ({len(df)} points, " f"{len(attrs)} numeric attrs)"
     )
     return CatalogData(
         x=numeric[x_col].to_numpy(dtype=float),
@@ -180,9 +171,7 @@ def load_raster(path, z_band=None, window=None) -> pv.PolyData:
                 f"Raster window too small to triangulate: {w}x{h} (need >= 2x2)."
             )
         if z_band is not None and z_band > ds.count:
-            raise ValueError(
-                f"z_band={z_band} but raster has {ds.count} band(s)."
-            )
+            raise ValueError(f"z_band={z_band} but raster has {ds.count} band(s).")
 
         tfm = rasterio.windows.transform(window, ds.transform)
         cols = np.arange(w, dtype=float) + 0.5
@@ -215,7 +204,7 @@ def load_raster(path, z_band=None, window=None) -> pv.PolyData:
     z_fill = np.where(valid, zs, 0.0)
     points = np.c_[xs.ravel(), ys.ravel(), z_fill.ravel()]
 
-    faces = _quad_faces(valid, w)
+    faces = quad_faces(valid, w)
     if faces.size == 0:
         raise ValueError("No valid faces built from raster (all pixels masked?).")
 
@@ -231,7 +220,7 @@ def load_raster(path, z_band=None, window=None) -> pv.PolyData:
     return poly
 
 
-def _quad_faces(valid, w):
+def quad_faces(valid, w):
     v00 = valid[:-1, :-1]
     v10 = valid[:-1, 1:]
     v01 = valid[1:, :-1]
@@ -257,7 +246,9 @@ def _quad_faces(valid, w):
     return tris.ravel()
 
 
-def load_solver_output(path, schema: ModelSchema | str = "adeli") -> pv.UnstructuredGrid:
+def load_solver_output(
+    path, schema: ModelSchema | str = "adeli"
+) -> pv.UnstructuredGrid:
     """
     Load a FEM result file and rename arrays to canonical names.
 
@@ -268,35 +259,41 @@ def load_solver_output(path, schema: ModelSchema | str = "adeli") -> pv.Unstruct
     if isinstance(schema, str):
         schema = ModelSchema.builtin(schema)
 
-    grid = pv.read(path)
+    mesh = pv.read(path)
+
+    if mesh.n_points == 0:
+        raise ValueError(f"Empty mesh: {path}")
+
     loaded, skipped = [], []
 
     for canonical, entry in schema.fields.items():
-        if _rename(grid, entry.solver_key, canonical):
+        if rename_array(mesh, entry.solver_key, canonical):
             if canonical.startswith("dir_"):
-                _normalize(grid, canonical)
+                normalize_vector(mesh, canonical)
             loaded.append(canonical)
         else:
             skipped.append(entry.solver_key)
 
     for name, entry in schema.tensors.items():
         if entry.is_packed:
-            ok = _rename(grid, entry.voigt6, name)
-            (loaded if ok else skipped).append(name if ok else entry.voigt6)
+            array_ok = rename_array(mesh, entry.voigt6, name)
+            (loaded if array_ok else skipped).append(name if array_ok else entry.voigt6)
         else:
             for comp, solver_key in entry.components.items():
                 tag = f"_tensor_{name}_{comp}"
-                ok = _rename(grid, solver_key, tag)
-                (loaded if ok else skipped).append(tag if ok else solver_key)
+                array_ok = rename_array(mesh, solver_key, tag)
+                (loaded if array_ok else skipped).append(
+                    tag if array_ok else solver_key
+                )
 
     log.info(f"  Fields: {', '.join(sorted(loaded))}")
     if skipped:
         log.warning(f"  Not found: {', '.join(sorted(skipped))}")
 
-    return grid
+    return mesh
 
 
-def _rename(grid, solver_key, canonical) -> bool:
+def rename_array(grid, solver_key, canonical) -> bool:
     """Rename an array in cell or point data. Returns True if found."""
     for store in (grid.cell_data, grid.point_data):
         if solver_key in store:
@@ -307,7 +304,7 @@ def _rename(grid, solver_key, canonical) -> bool:
     return False
 
 
-def _normalize(grid, canonical):
+def normalize_vector(grid, canonical):
     """Normalize a directional array to unit vectors in place."""
     for store in (grid.cell_data, grid.point_data):
         if canonical in store:
