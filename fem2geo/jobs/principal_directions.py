@@ -9,9 +9,9 @@ directions can be enabled to visualise the spread around the average.
 Config reference
 ----------------
 job: principal_directions
-schema: adeli
+schema: adeli                       # built-in schema name (default: adeli)
 
-model: path/to/model.vtk
+model: path/to/model.vtk            # relative to this config file
 # OR
 models:
   model_a: path/to/model_a.vtu
@@ -26,21 +26,21 @@ plot:
   title: "Principal stress directions"
   figsize: [8, 8]
   dpi: 200
-  avg_directions:
+  avg_directions:                   # model average σ1/σ2/σ3 (default: show=true)
     show: true
     color: "white"
     markersize: 8
-  cell_directions:
+  cell_directions:                  # per-cell model directions (default: show=false)
     show: false
-    style: scatter
+    style: scatter                  # scatter | contour
     color: "k"
     markersize: 3
     alpha: 0.4
 
 output:
-  dir: results/
+  dir: results/                     # optional, defaults to config file directory
   figure: principal_directions.png
-  vtu: extract.vtu
+  vtu: extract.vtu                  # save extracted sub-model for Paraview
 
 Example
 -------

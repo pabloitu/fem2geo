@@ -1,26 +1,25 @@
 """
 Job: project
 ============
-Project georeferenced data into a local cartesian model frame. The
-model frame is pinned to a real-world anchor point and optionally
-rotated around it. The input kind is declared as a sub-block under
-``data:``: ``catalog`` for CSV point sets, ``mesh`` for VTK files,
-``raster`` for GeoTIFFs.
+Project georeferenced data into a local cartesian model frame. The model frame is
+pinned to a real-world anchor point and optionally rotated around it. The input kind
+is declared as a sub-block under ``data:``: ``catalog`` for CSV point sets, ``mesh``
+for VTK files, ``raster`` for GeoTIFFs.
 
-For rasters, ``src.xy_units`` applies to the GeoTIFF's CRS (``deg``
-for lon/lat sources, ``m`` or ``km`` for projected) while
-``src.z_units`` applies to the band value; the two can differ.
+For rasters, ``src.xy_units`` applies to the GeoTIFF's CRS (``deg`` for lon/lat
+sources, ``m`` or ``km`` for projected) while ``src.z_units`` applies to the band
+value; the two can differ.
 
-Meshes are assumed to be ENU (Z positive up) with XY and Z in the
-same unit. ``src.z_units`` and ``src.z_positive`` are therefore
-ignored for mesh inputs and may be omitted.
+Meshes are assumed to be ENU (Z positive up) with XY and Z in the same unit.
+``src.z_units`` and ``src.z_positive`` are therefore ignored for mesh inputs and may
+be omitted.
 
-An intermediate azimuthal equidistant projection centered on the
-anchor is used automatically; the user does not specify it. The
-anchor always lands at (0, 0) in that projection.
+An intermediate azimuthal equidistant projection centered on the anchor is used
+automatically; the user does not specify it. The anchor always lands at (0,
+0) in that projection.
 
-An optional ``src.bbox`` filter in lon/lat/depth_km is applied before
-projection, regardless of the source CRS.
+An optional ``src.bbox`` filter in lon/lat/depth_km is applied before projection,
+regardless of the source CRS.
 
 Config reference
 ----------------
@@ -77,7 +76,11 @@ from fem2geo.internal.io import load_catalog_csv, load_mesh, load_raster
 from fem2geo.projector import Projector
 from fem2geo.runner import resolve_output
 from fem2geo.utils.projections import (
-    bbox_mask, bbox_to_crs_bounds, bbox_to_src_bounds, flip_z, to_lonlat,
+    bbox_mask,
+    bbox_to_crs_bounds,
+    bbox_to_src_bounds,
+    flip_z,
+    to_lonlat,
     unit_factor,
 )
 
@@ -85,8 +88,8 @@ log = logging.getLogger("fem2geoLogger")
 
 KIND_EXTS = {
     "catalog": {".csv"},
-    "mesh":    {".vtp", ".vtu", ".vtk"},
-    "raster":  {".tif", ".tiff"},
+    "mesh": {".vtp", ".vtu", ".vtk"},
+    "raster": {".tif", ".tiff"},
 }
 
 
@@ -115,8 +118,7 @@ def run(cfg, job_dir):
             )
         if "z_positive" in src and src["z_positive"] != "up":
             raise ValueError(
-                "src.z_positive must be 'up' for mesh inputs (ENU), "
-                "or be omitted."
+                "src.z_positive must be 'up' for mesh inputs (ENU), " "or be omitted."
             )
         src["z_units"] = src["xy_units"]
         src["z_positive"] = "up"
@@ -147,10 +149,14 @@ def run(cfg, job_dir):
         f"+x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
     )
     proj = Projector(
-        src_crs=src["crs"], dst_crs=aeqd,
-        src_xy_units=src["xy_units"], dst_xy_units=dst["units"],
-        src_z_units=src["z_units"], dst_z_units=dst["units"],
-        src_z_positive=src["z_positive"], dst_z_positive="up",
+        src_crs=src["crs"],
+        dst_crs=aeqd,
+        src_xy_units=src["xy_units"],
+        dst_xy_units=dst["units"],
+        src_z_units=src["z_units"],
+        dst_z_units=dst["units"],
+        src_z_positive=src["z_positive"],
+        dst_z_positive="up",
         anchor_geo=(lon0, lat0, depth_km),
         anchor_local=tuple(model),
         rotation_deg=rotation_deg,
@@ -171,8 +177,11 @@ def run(cfg, job_dir):
         mesh = load_mesh(path)
         if bbox:
             bounds = bbox_to_src_bounds(
-                bbox, src["crs"], src["xy_units"],
-                src["z_units"], src["z_positive"],
+                bbox,
+                src["crs"],
+                src["xy_units"],
+                src["z_units"],
+                src["z_positive"],
             )
             mesh = mesh.clip_box(bounds, invert=False)
             log.info(f"  bbox: kept {mesh.n_points} points, {mesh.n_cells} cells")
@@ -193,18 +202,15 @@ def run(cfg, job_dir):
 
 # config parsing
 
+
 def parse_anchor_data(ad, src):
     has_lonlat = "lon" in ad or "lat" in ad
     has_xy = "x" in ad or "y" in ad
 
     if has_lonlat and has_xy:
-        raise ValueError(
-            "dst.anchor.data cannot mix lon/lat with x/y; pick one form."
-        )
+        raise ValueError("dst.anchor.data cannot mix lon/lat with x/y; pick one form.")
     if not has_lonlat and not has_xy:
-        raise ValueError(
-            "dst.anchor.data must specify either lon/lat or x/y."
-        )
+        raise ValueError("dst.anchor.data must specify either lon/lat or x/y.")
 
     if has_lonlat:
         require(ad, "dst.anchor.data", "lon", "lat")
@@ -217,7 +223,10 @@ def parse_anchor_data(ad, src):
             "use lon/lat instead."
         )
     lon, lat = to_lonlat(
-        [float(ad["x"])], [float(ad["y"])], src["crs"], src["xy_units"],
+        [float(ad["x"])],
+        [float(ad["y"])],
+        src["crs"],
+        src["xy_units"],
     )
     return float(lon[0]), float(lat[0])
 
@@ -229,9 +238,7 @@ def parse_data(d, job_dir):
             f"data must declare one of {sorted(KIND_EXTS)} as a sub-block."
         )
     if len(declared) > 1:
-        raise ValueError(
-            f"data has multiple sub-blocks ({declared}); pick one."
-        )
+        raise ValueError(f"data has multiple sub-blocks ({declared}); pick one.")
     kind = declared[0]
     sub = d[kind] or {}
 
@@ -252,8 +259,7 @@ def parse_data(d, job_dir):
         cols = sub["columns"]
         if len(cols) != 3:
             raise ValueError(
-                "data.catalog.columns must be a length-3 list "
-                "[x_col, y_col, z_col]."
+                "data.catalog.columns must be a length-3 list " "[x_col, y_col, z_col]."
             )
         sub = dict(sub)
         sub["columns"] = tuple(cols)
@@ -272,19 +278,29 @@ def parse_data(d, job_dir):
 
 # pipeline helpers
 
+
 def filter_catalog(cat, bbox, src):
     lon, lat = to_lonlat(cat.x, cat.y, src["crs"], src["xy_units"])
-    depth_km = flip_z(
-        cat.z * unit_factor(src["z_units"]), src["z_positive"], "down",
-    ) / 1000.0
+    depth_km = (
+        flip_z(
+            cat.z * unit_factor(src["z_units"]),
+            src["z_positive"],
+            "down",
+        )
+        / 1000.0
+    )
     mask = bbox_mask(
-        lon, lat, depth_km,
+        lon,
+        lat,
+        depth_km,
         lon_range=bbox.get("lon"),
         lat_range=bbox.get("lat"),
         depth_range_km=bbox.get("depth_km"),
     )
     out = CatalogData(
-        x=cat.x[mask], y=cat.y[mask], z=cat.z[mask],
+        x=cat.x[mask],
+        y=cat.y[mask],
+        z=cat.z[mask],
         attrs={k: v[mask] for k, v in cat.attrs.items()},
     )
     log.info(f"  bbox: kept {len(out)} points")
@@ -302,8 +318,10 @@ def raster_window(path, bbox):
         bounds = bbox_to_crs_bounds(bbox, ds.crs)
         if bounds is None:
             bounds = (
-                ds.bounds.left, ds.bounds.bottom,
-                ds.bounds.right, ds.bounds.top,
+                ds.bounds.left,
+                ds.bounds.bottom,
+                ds.bounds.right,
+                ds.bounds.top,
             )
         left, bottom, right, top = bounds
         win = from_bounds(left, bottom, right, top, ds.transform)

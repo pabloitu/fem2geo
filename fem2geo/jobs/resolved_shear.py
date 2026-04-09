@@ -84,7 +84,11 @@ from fem2geo.internal.io import load_structural_csv
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
-    get_style, stereo_axes, stereo_pole, stereo_plane, stereo_slip_arrow,
+    get_style,
+    stereo_axes,
+    stereo_pole,
+    stereo_plane,
+    stereo_slip_arrow,
 )
 from fem2geo.runner import resolve_output
 from fem2geo.utils.tensor import resolved_rake
@@ -148,7 +152,9 @@ def run(cfg: dict, job_dir: Path) -> None:
         fault_datasets[name] = sd
 
     if not fault_datasets:
-        raise ValueError("No fault datasets found. CSV files must have strike, dip, rake columns.")
+        raise ValueError(
+            "No fault datasets found. CSV files must have strike, dip, " "rake columns."
+        )
 
     # figure
     fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
@@ -162,20 +168,47 @@ def run(cfg: dict, job_dir: Path) -> None:
         # fault planes or poles
         if show_planes:
             if plane_style == "planes":
-                stereo_plane(ax, strikes, dips, color=plane_color,
-                             alpha=plane_alpha, linewidth=plane_lw)
+                stereo_plane(
+                    ax,
+                    strikes,
+                    dips,
+                    color=plane_color,
+                    alpha=plane_alpha,
+                    linewidth=plane_lw,
+                )
             else:
-                stereo_pole(ax, strikes, dips, color=plane_color,
-                            marker="+", markersize=6, alpha=plane_alpha)
+                stereo_pole(
+                    ax,
+                    strikes,
+                    dips,
+                    color=plane_color,
+                    marker="+",
+                    markersize=6,
+                    alpha=plane_alpha,
+                )
 
         # observed slip arrows
-        stereo_slip_arrow(ax, strikes, dips, rakes,
-                          color=obs_color, arrowsize=obs_arrowsize, linewidth=obs_lw)
+        stereo_slip_arrow(
+            ax,
+            strikes,
+            dips,
+            rakes,
+            color=obs_color,
+            arrowsize=obs_arrowsize,
+            linewidth=obs_lw,
+        )
 
         # predicted slip arrows (resolved shear traction)
         pred = resolved_rake(avg_stress, strikes, dips)
-        stereo_slip_arrow(ax, strikes, dips, pred,
-                          color=pred_color, arrowsize=pred_arrowsize, linewidth=pred_lw)
+        stereo_slip_arrow(
+            ax,
+            strikes,
+            dips,
+            pred,
+            color=pred_color,
+            arrowsize=pred_arrowsize,
+            linewidth=pred_lw,
+        )
 
     # average principal directions
     if show_avg:
@@ -184,30 +217,84 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # legend
     legend_elements = [
-        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
-                        color=obs_color, lw=obs_lw, label="Observed slip"),
-        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
-                        color=pred_color, lw=pred_lw, label="Predicted slip"),
+        FancyArrowPatch(
+            (0, 0),
+            (0.02, 0),
+            arrowstyle="->",
+            color=obs_color,
+            lw=obs_lw,
+            label="Observed slip",
+        ),
+        FancyArrowPatch(
+            (0, 0),
+            (0.02, 0),
+            arrowstyle="->",
+            color=pred_color,
+            lw=pred_lw,
+            label="Predicted slip",
+        ),
     ]
     if show_planes:
         if plane_style == "planes":
             legend_elements.append(
-                Line2D([0], [0], color=plane_color, linewidth=plane_lw,
-                       alpha=plane_alpha, label="Fault planes"))
+                Line2D(
+                    [0],
+                    [0],
+                    color=plane_color,
+                    linewidth=plane_lw,
+                    alpha=plane_alpha,
+                    label="Fault planes",
+                )
+            )
         else:
             legend_elements.append(
-                Line2D([0], [0], color=plane_color, linewidth=0, marker="+",
-                       markersize=6, alpha=plane_alpha, label="Fault poles"))
+                Line2D(
+                    [0],
+                    [0],
+                    color=plane_color,
+                    linewidth=0,
+                    marker="+",
+                    markersize=6,
+                    alpha=plane_alpha,
+                    label="Fault poles",
+                )
+            )
     if show_avg:
-        legend_elements.extend([
-            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="o", label=r"$\sigma_1$"),
-            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="s", label=r"$\sigma_2$"),
-            Line2D([0], [0], color=avg_style["color"], linewidth=0, marker="v", label=r"$\sigma_3$"),
-        ])
+        legend_elements.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style["color"],
+                    linewidth=0,
+                    marker="o",
+                    label=r"$\sigma_1$",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style["color"],
+                    linewidth=0,
+                    marker="s",
+                    label=r"$\sigma_2$",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    color=avg_style["color"],
+                    linewidth=0,
+                    marker="v",
+                    label=r"$\sigma_3$",
+                ),
+            ]
+        )
 
     ax.legend(handles=legend_elements, fontsize=7)
     ax.set_title(plot.get("title", "Resolved shear analysis"), y=1.08)
-    fig.savefig(out_dir / out.get("figure", "resolved_shear.png"),
-                dpi=plot.get("dpi", 200), bbox_inches="tight")
+    fig.savefig(
+        out_dir / out.get("figure", "resolved_shear.png"),
+        dpi=plot.get("dpi", 200),
+        bbox_inches="tight",
+    )
     plt.close(fig)
     log.info(f"Saved results: {out_dir}")

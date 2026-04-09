@@ -2,13 +2,9 @@
 Job: kostrov
 ============
 Computes the Kostrov (1974) summed moment tensor from a fault population
-and compares its principal axes with the model's average deviatoric stress
-principal directions on a stereonet.
-
+and compares its principal axes with a model's tensor principal directions.
 The Kostrov tensor represents the bulk kinematic strain implied by the
-observed fault slip. If the model stress field is mechanically consistent
-with the faulting, the Kostrov shortening axis should align with σ1 and
-the extension axis with σ3.
+observed fault slip.
 
 Structural data is read from CSV files via
 :func:`fem2geo.internal.io.load_structural_csv`. Only fault data
@@ -31,7 +27,7 @@ zone:
 data:
   faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
-tensor: strain                  #  strain | strain_rate | strain_plastic | strain_elastic
+tensor: strain                      #  strain | strain_rate | strain_plastic | strain_elastic
 
 plot:
   title: "Kostrov analysis"
@@ -72,7 +68,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
-from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
