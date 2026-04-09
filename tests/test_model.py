@@ -261,7 +261,7 @@ class TestExtraction(unittest.TestCase):
 class TestFromFile(unittest.TestCase):
 
     def test_string_schema_resolved(self):
-        with patch("fem2geo.model.load_grid", return_value=_grid({})), \
+        with patch("fem2geo.model.load_solver_output", return_value=_grid({})), \
              patch("fem2geo.model.ModelSchema.builtin",
                    return_value=_SCHEMA_EMPTY) as mock:
             m = Model.from_file("x.vtk", schema="adeli")
@@ -269,7 +269,7 @@ class TestFromFile(unittest.TestCase):
         self.assertIsInstance(m, Model)
 
     def test_schema_retained(self):
-        with patch("fem2geo.model.load_grid", return_value=_grid({})):
+        with patch("fem2geo.model.load_solver_output", return_value=_grid({})):
             m = Model.from_file("x.vtk", schema=_SCHEMA_EMPTY)
         self.assertIs(m.schema, _SCHEMA_EMPTY)
 

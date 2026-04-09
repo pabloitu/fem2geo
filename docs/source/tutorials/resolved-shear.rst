@@ -1,5 +1,5 @@
 .. _resolved-shear:
 
-Resolved Shear Analysis
+Resolved-Shear Analysis
 =======================
 

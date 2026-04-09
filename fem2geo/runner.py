@@ -15,6 +15,7 @@ _JOBS = {
     "fracture":    "fem2geo.jobs.fracture",
     "resolved_shear":       "fem2geo.jobs.resolved_shear",
     "kostrov":     "fem2geo.jobs.kostrov",
+    "project":     "fem2geo.jobs.project",
 }
 
 

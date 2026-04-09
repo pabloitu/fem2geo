@@ -1,8 +1,12 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+
 import numpy as np
 
-from fem2geo.internal.io import load_grid, _normalize
+from fem2geo.data import CatalogData
+from fem2geo.internal.io import load_solver_output, load_catalog_csv, _normalize
 from fem2geo.internal.schema import ModelSchema
 
 
@@ -23,7 +27,7 @@ def _load(cell_data, schema_dict):
     schema = ModelSchema.from_dict(schema_dict)
     g = _grid(cell_data)
     with patch("fem2geo.internal.io.pv.read", return_value=g):
-        return load_grid("dummy.vtk", schema=schema)
+        return load_solver_output("dummy.vtk", schema=schema)
 
 
 class TestNormalize(unittest.TestCase):
@@ -128,6 +132,99 @@ class TestVoigtTensorRenaming(unittest.TestCase):
         with self.assertLogs("fem2geoLogger", level="WARNING"):
             g = _load({}, self._SCHEMA)
         self.assertNotIn("stress", g.cell_data)
+
+
+class TestLoadCatalogCsv(unittest.TestCase):
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, name, text):
+        p = self.tmp / name
+        p.write_text(text)
+        return p
+
+    def test_basic_load(self):
+        p = self._write(
+            "cat.csv",
+            "longitude,latitude,depth,mag\n"
+            "-71.0,-20.1,5.0,3.5\n"
+            "-71.5,-20.3,12.0,4.1\n"
+            "-72.0,-20.5,25.0,5.0\n",
+        )
+        cat = load_catalog_csv(p, columns=("longitude", "latitude", "depth"))
+        self.assertIsInstance(cat, CatalogData)
+        self.assertEqual(len(cat), 3)
+        np.testing.assert_array_equal(cat.x, [-71.0, -71.5, -72.0])
+        np.testing.assert_array_equal(cat.y, [-20.1, -20.3, -20.5])
+        np.testing.assert_array_equal(cat.z, [5.0, 12.0, 25.0])
+        np.testing.assert_array_equal(cat.attrs["mag"], [3.5, 4.1, 5.0])
+
+    def test_non_numeric_columns_dropped(self):
+        p = self._write(
+            "mixed.csv",
+            "lon,lat,z,mag,magType,evid\n"
+            "-71.0,-20.1,5.0,3.5,Mw,evt001\n"
+            "-71.5,-20.3,12.0,4.1,ML,evt002\n",
+        )
+        with self.assertLogs("fem2geoLogger", level="WARNING") as cm:
+            cat = load_catalog_csv(p, columns=("lon", "lat", "z"))
+        self.assertIn("mag", cat.attrs)
+        self.assertNotIn("magType", cat.attrs)
+        self.assertNotIn("evid", cat.attrs)
+        log_text = "\n".join(cm.output)
+        self.assertIn("magType", log_text)
+        self.assertIn("evid", log_text)
+
+    def test_empty_cells_become_nan(self):
+        p = self._write(
+            "empty_cells.csv",
+            "lon,lat,z,rms\n"
+            "-71.0,-20.1,5.0,0.3\n"
+            "-71.5,-20.3,12.0,\n"
+            "-72.0,-20.5,25.0,0.5\n",
+        )
+        cat = load_catalog_csv(p, columns=("lon", "lat", "z"))
+        self.assertTrue(np.isnan(cat.attrs["rms"][1]))
+        self.assertEqual(cat.attrs["rms"][0], 0.3)
+        self.assertEqual(cat.attrs["rms"][2], 0.5)
+
+    def test_missing_file(self):
+        with self.assertRaises(FileNotFoundError):
+            load_catalog_csv(self.tmp / "nope.csv", columns=("a", "b", "c"))
+
+    def test_missing_column(self):
+        p = self._write("c.csv", "longitude,latitude,depth\n-71,-20,5\n")
+        with self.assertRaisesRegex(ValueError, "not found"):
+            load_catalog_csv(p, columns=("longitude", "latitude", "elevation"))
+
+    def test_empty_csv(self):
+        p = self._write("empty.csv", "lon,lat,z\n")
+        with self.assertRaisesRegex(ValueError, "empty"):
+            load_catalog_csv(p, columns=("lon", "lat", "z"))
+
+    def test_no_extra_columns(self):
+        p = self._write("minimal.csv", "lon,lat,z\n-71,-20,5\n-72,-21,10\n")
+        cat = load_catalog_csv(p, columns=("lon", "lat", "z"))
+        self.assertEqual(len(cat), 2)
+        self.assertEqual(cat.attrs, {})
+
+    def test_column_order_independent(self):
+        p = self._write(
+            "reordered.csv",
+            "mag,depth,lat,lon\n"
+            "3.5,5.0,-20.1,-71.0\n"
+            "4.1,12.0,-20.3,-71.5\n",
+        )
+        cat = load_catalog_csv(p, columns=("lon", "lat", "depth"))
+        np.testing.assert_array_equal(cat.x, [-71.0, -71.5])
+        np.testing.assert_array_equal(cat.y, [-20.1, -20.3])
+        np.testing.assert_array_equal(cat.z, [5.0, 12.0])
+        np.testing.assert_array_equal(cat.attrs["mag"], [3.5, 4.1])
 
 
 if __name__ == "__main__":

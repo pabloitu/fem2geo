@@ -40,7 +40,9 @@ dependencies = [
     "meshio",
     "pyvista",
     "mplstereonet",
-    "pyyaml"
+    "pyproj",
+    "pyyaml",
+    "rasterio"
 ]
 dynamic = ["version"]
 

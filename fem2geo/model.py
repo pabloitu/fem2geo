@@ -4,7 +4,7 @@ from functools import cached_property
 import numpy as np
 import pyvista as pv
 
-from fem2geo.internal.io import load_grid
+from fem2geo.internal.io import load_solver_output
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.utils import tensor
 
@@ -184,7 +184,7 @@ class Model:
         """
         if isinstance(schema, str):
             schema = ModelSchema.builtin(schema)
-        return cls(load_grid(path, schema), schema)
+        return cls(load_solver_output(path, schema), schema)
 
     # geometry
 

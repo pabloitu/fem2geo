@@ -1,0 +1,13 @@
+name: fem2geo
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python <= 3.12
+  - numpy
+  - matplotlib
+  - meshio
+  - pyvista
+  - mplstereonet
+  - pyyaml
+

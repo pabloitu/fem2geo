@@ -54,7 +54,7 @@ fem2geo
 | |concepts| **Core Concepts**                 | - :ref:`resolved-shear`                      |
 |                                              | - :ref:`kostrov`                             |
 | |jobs| **Jobs Reference**                    | - :ref:`tendency`                            |
-|                                              |                                              |
+|                                              | - :ref:`projections`                         |
 | |api| **API Reference**                      |                                              |
 +----------------------------------------------+----------------------------------------------+
 
@@ -141,6 +141,7 @@ Useful links
    tutorials/resolved-shear
    tutorials/kostrov
    tutorials/tendency
+   tutorials/projections
 
 
 .. toctree::
