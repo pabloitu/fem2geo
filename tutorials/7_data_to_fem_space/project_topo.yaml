@@ -1,8 +1,8 @@
 job: project
 
 data:
-  file: ../data/topo_chile.tif
   raster:
+    file: ../data/topo_chile.tif
     z_band: 1
 
 src:
@@ -18,11 +18,11 @@ dst:
   units: km
   anchor:
     data:
-      lon: -71.07
-      lat: -20.09
-      depth_km: 8
-    model: [0, 0, -6]
-    rotation_deg: -20
+      lon: -70.929
+      lat: -20.17
+      depth_km: 18
+    model: [0, 0, -12.8]
+    rotation_deg: -10
 
 output:
   dir: results/

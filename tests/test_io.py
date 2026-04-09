@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 
 from fem2geo.data import CatalogData
-from fem2geo.internal.io import load_solver_output, load_catalog_csv, _normalize
+from fem2geo.internal.io import load_solver_output, load_catalog_csv, normalize_vector
 from fem2geo.internal.schema import ModelSchema
 
 
@@ -34,14 +34,14 @@ class TestNormalize(unittest.TestCase):
 
     def test_scales_to_unit_and_preserves_direction(self):
         g = _grid({"d": np.array([[3.0, 0.0, 0.0], [0.0, 4.0, 0.0]])})
-        _normalize(g, "d")
+        normalize_vector(g, "d")
         np.testing.assert_allclose(
             np.linalg.norm(g.cell_data["d"], axis=1), 1.0, atol=1e-12)
         np.testing.assert_allclose(g.cell_data["d"][0], [1, 0, 0], atol=1e-12)
 
     def test_zero_vector_no_crash(self):
         g = _grid({"d": np.array([[0.0, 0.0, 0.0]])})
-        _normalize(g, "d")
+        normalize_vector(g, "d")
         self.assertEqual(g.cell_data["d"].shape, (1, 3))
 
 

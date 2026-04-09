@@ -2,13 +2,9 @@
 Job: kostrov
 ============
 Computes the Kostrov (1974) summed moment tensor from a fault population
-and compares its principal axes with the model's average deviatoric stress
-principal directions on a stereonet.
-
+and compares its principal axes with a model's tensor principal directions.
 The Kostrov tensor represents the bulk kinematic strain implied by the
-observed fault slip. If the model stress field is mechanically consistent
-with the faulting, the Kostrov shortening axis should align with σ1 and
-the extension axis with σ3.
+observed fault slip.
 
 Structural data is read from CSV files via
 :func:`fem2geo.internal.io.load_structural_csv`. Only fault data
@@ -19,8 +15,6 @@ Config reference
 ----------------
 job: kostrov
 schema: adeli                       # built-in schema name (default: adeli)
-units:                              # optional category-level unit overrides
-  pressure: Pa
 
 model: path/to/model.vtu            # relative to this config file
 
@@ -33,7 +27,7 @@ zone:
 data:
   faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
 
-tensor: strain                  #  strain | strain_rate | strain_plastic | strain_elastic
+tensor: strain                      #  strain | strain_rate | strain_plastic | strain_elastic
 
 plot:
   title: "Kostrov analysis"
@@ -74,23 +68,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
-from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
-from fem2geo.plots import PlotConfig, stereo_line, stereo_contour
-from fem2geo.runner import parse_config
+from fem2geo.plots import get_style, stereo_axes, stereo_axes_contour
+from fem2geo.runner import resolve_output
 from fem2geo.utils import tensor
 from fem2geo.utils.tensor import kostrov_tensor, axes_misfit
-from fem2geo.utils.transform import line_enu2sphe
 
 log = logging.getLogger("fem2geoLogger")
 
-KOSTROV_STYLE = PlotConfig(color="#E63946", markersize=10, markeredgecolor="k")
-MODEL_STYLE = PlotConfig(color="#2196F3", markersize=10, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="grey", markersize=3, alpha=0.3)
-CONTOUR_STYLE = PlotConfig(color="grey", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(color="#E63946", markersize=3, alpha=0.3)
-DATA_CONTOUR_STYLE = PlotConfig(color="#E63946", levels=4, sigma=2.0, linewidth=1.0)
+KOSTROV_STYLE = {"color": "#E63946", "markersize": 10, "markeredgecolor": "k"}
+MODEL_STYLE = {"color": "#2196F3", "markersize": 10, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "grey", "markersize": 3, "alpha": 0.3}
+CONTOUR_STYLE = {"color": "grey", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+DATA_STYLE = {"color": "#E63946", "markersize": 3, "alpha": 0.3}
+DATA_CONTOUR_STYLE = {"color": "#E63946", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
 
 _TENSOR_LABELS = {
     "stress_dev": (r"$\sigma^{\mathrm{dev}}_1$", r"$\sigma^{\mathrm{dev}}_2$",
@@ -115,8 +108,11 @@ _K_LOG = ["K1 (short.)", "K2 (int.)", "K3 (ext.)"]
 
 
 def run(cfg: dict, job_dir: Path) -> None:
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
     which = cfg.get("tensor", "strain")
 
     kostrov_cfg = plot.get("kostrov", {})
@@ -124,16 +120,16 @@ def run(cfg: dict, job_dir: Path) -> None:
     cell_cfg = plot.get("cell_directions", {})
     data_cfg = plot.get("data_spread", {})
 
-    k_style = KOSTROV_STYLE.update(kostrov_cfg)
-    m_style = MODEL_STYLE.update(model_cfg)
+    k_style = get_style(KOSTROV_STYLE, kostrov_cfg)
+    m_style = get_style(MODEL_STYLE, model_cfg)
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour"
-               else CELL_STYLE).update(cell_cfg)
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
     show_data = data_cfg.get("show", False)
     data_style = data_cfg.get("style", "scatter")
-    data_pc = (DATA_CONTOUR_STYLE if data_style == "contour"
-               else DATA_STYLE).update(data_cfg)
+    data_base = DATA_CONTOUR_STYLE if data_style == "contour" else DATA_STYLE
+    data_pc = get_style(data_base, data_cfg)
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
@@ -180,55 +176,34 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell-level model directions
     if show_cell:
-        p1, a1 = line_enu2sphe(sub.dir_s1)
-        p2, a2 = line_enu2sphe(sub.dir_s2)
-        p3, a3 = line_enu2sphe(sub.dir_s3)
+        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
         if cell_style == "contour":
-            kw = cell_pc.kwargs()
-            stereo_contour(ax, p1, a1, **kw)
-            stereo_contour(ax, p2, a2, **kw)
-            stereo_contour(ax, p3, a3, **kw)
+            stereo_axes_contour(ax, cell_vecs, cell_pc)
         else:
-            stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
-            stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
-            stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
+            stereo_axes(ax, cell_vecs, cell_pc)
 
     # per-fault P/B/T axes via individual Kostrov dyads
     if show_data:
         dyads = np.array(
             [kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)])
         per_vecs = tensor.eigenvectors(dyads)
-        p_p, p_a = line_enu2sphe(per_vecs[:, :, 0])
-        b_p, b_a = line_enu2sphe(per_vecs[:, :, 1])
-        t_p, t_a = line_enu2sphe(per_vecs[:, :, 2])
         if data_style == "contour":
-            kw = data_pc.kwargs()
-            stereo_contour(ax, p_p, p_a, **kw)
-            stereo_contour(ax, b_p, b_a, **kw)
-            stereo_contour(ax, t_p, t_a, **kw)
+            stereo_axes_contour(ax, per_vecs, data_pc)
         else:
-            stereo_line(ax, p_p, p_a, **data_pc.update(marker="o").kwargs())
-            stereo_line(ax, b_p, b_a, **data_pc.update(marker="s").kwargs())
-            stereo_line(ax, t_p, t_a, **data_pc.update(marker="v").kwargs())
+            stereo_axes(ax, per_vecs, data_pc)
 
     # Kostrov principal axes
-    for i, marker in enumerate(["o", "s", "v"]):
-        p, a = line_enu2sphe(k_vecs[:, i])
-        stereo_line(ax, p, a, label=_K_LABELS[i],
-                    **k_style.update(marker=marker).kwargs())
+    stereo_axes(ax, k_vecs, k_style, labels=_K_LABELS)
 
     # model principal axes
-    for i, marker in enumerate(["o", "s", "v"]):
-        p, a = line_enu2sphe(m_vecs[:, i])
-        stereo_line(ax, p, a, label=axis_labels[i],
-                    **m_style.update(marker=marker).kwargs())
+    stereo_axes(ax, m_vecs, m_style, labels=axis_labels)
 
     # legend
     sym = _TENSOR_SYMBOL[which]
     legend_elements = [
-        Line2D([0], [0], color=k_style.color, linewidth=0, marker="o", markersize=8,
+        Line2D([0], [0], color=k_style["color"], linewidth=0, marker="o", markersize=8,
                label="Kostrov axes"),
-        Line2D([0], [0], color=m_style.color, linewidth=0, marker="o", markersize=8,
+        Line2D([0], [0], color=m_style["color"], linewidth=0, marker="o", markersize=8,
                label=f"{sym} axes"),
         Line2D([], [], color="k", linewidth=0, marker="o", markersize=6,
                label=rf"$K_1$, {axis_labels[0]}"),

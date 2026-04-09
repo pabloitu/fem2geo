@@ -8,51 +8,9 @@ from fem2geo.internal.io import load_solver_output
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.utils import tensor
 
+__all__ = ["Model"]
+
 log = logging.getLogger("fem2geoLogger")
-
-
-# field descriptors
-
-class ScalarField:
-    """Lazy descriptor for scalar fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj.get(self.name)
-        setattr(obj, self.name, val)
-        return val
-
-
-class VectorField:
-    """Lazy descriptor for vector fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj.get(self.name)
-        setattr(obj, self.name, val)
-        return val
-
-
-class TensorField:
-    """Lazy descriptor for tensor fields."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        val = obj._assemble_tensor(self.name)   # noqa
-        setattr(obj, self.name, val)
-        return val
 
 
 class Model:
@@ -60,106 +18,20 @@ class Model:
     Interface to a FEM/BEM model for geomechanical post-processing.
 
     Wraps a mesh loaded from VTK/VTU files and provides named access to stress,
-    strain, kinematic, and scalar fields in ENU coordinates. Fields are lazy-loaded
-    and cached on first access.
+    strain, kinematic, and scalar fields in ENU coordinates.
 
     Parameters
     ----------
     grid : pyvista.UnstructuredGrid
         Mesh with arrays renamed to canonical names by
-        :func:`~fem2geo.internal.io.load_grid`.
+        :func:`~fem2geo.internal.io.load_solver_output`.
     schema : ModelSchema
         Schema mapping canonical names to solver-specific array names and units.
 
     See Also
     --------
-     :meth:`fem2geo.model.Model.from_file`: Construct a Model directly from a VTK/VTU
-    path.
-
-    Attributes
-    ----------
-    stress : numpy.ndarray, shape (N, 3, 3)
-        Full stress tensor.
-    stress_dev : numpy.ndarray, shape (N, 3, 3)
-        Deviatoric stress tensor.
-    strain : numpy.ndarray, shape (N, 3, 3)
-        Total strain tensor.
-    strain_rate : numpy.ndarray, shape (N, 3, 3)
-        Total strain rate tensor.
-    strain_plastic : numpy.ndarray, shape (N, 3, 3)
-        Plastic strain tensor.
-    strain_elastic : numpy.ndarray, shape (N, 3, 3)
-        Elastic strain tensor.
-    u : numpy.ndarray, shape (N, 3)
-        Displacement vectors.
-    v : numpy.ndarray, shape (N, 3)
-        Velocity vectors.
-    t : numpy.ndarray, shape (N,)
-        Time field (if available).
-    dir_s1 : numpy.ndarray, shape (N, 3)
-        Most compressive principal stress direction (ENU).
-    dir_s3 : numpy.ndarray, shape (N, 3)
-        Least compressive principal stress direction (ENU).
-    i1_strain : numpy.ndarray, shape (N,)
-        First strain invariant (volumetric strain).
-    j2_strain : numpy.ndarray, shape (N,)
-        Second deviatoric strain invariant.
-    j2_stress : numpy.ndarray, shape (N,)
-        Second deviatoric stress invariant.
-    i1_strain_rate : numpy.ndarray, shape (N,)
-        First strain rate invariant.
-    j2_strain_rate : numpy.ndarray, shape (N,)
-        Second deviatoric strain rate invariant.
-    plastic_eff : numpy.ndarray, shape (N,)
-        Effective plastic strain.
-    plastic_vol : numpy.ndarray, shape (N,)
-        Volumetric plastic strain.
-    plastic_yield : numpy.ndarray, shape (N,)
-        Plastic yield indicator.
-    plastic_mode : numpy.ndarray, shape (N,)
-        Plastic failure mode.
-    mean_stress : numpy.ndarray, shape (N,)
-        Mean stress (pressure).
-    viscosity : numpy.ndarray, shape (N,)
-        Effective viscosity.
-    threshold_ratio : numpy.ndarray, shape (N,)
-        Yield threshold ratio.
-    temperature : numpy.ndarray, shape (N,)
-        Temperature field.
-    fluid_pressure : numpy.ndarray, shape (N,)
-        Fluid pressure.
-    darcy_vel : numpy.ndarray, shape (N, 3)
-        Darcy velocity vectors.
-    heat_flux : numpy.ndarray, shape (N, 3)
-        Heat flux vectors.
+    Model.from_file : Construct a Model directly from a VTK/VTU path.
     """
-
-    # tensors
-    strain      = TensorField("strain")
-    strain_rate = TensorField("strain_rate")
-
-    # kinematics
-    u = VectorField("u")
-    v = VectorField("v")
-    t = ScalarField("t")
-
-    # scalar fields
-    i1_strain       = ScalarField("i1_strain")
-    j2_strain       = ScalarField("j2_strain")
-    j2_stress       = ScalarField("j2_stress")
-    i1_strain_rate  = ScalarField("i1_strain_rate")
-    j2_strain_rate  = ScalarField("j2_strain_rate")
-    plastic_eff     = ScalarField("plastic_eff")
-    plastic_vol     = ScalarField("plastic_vol")
-    plastic_yield   = ScalarField("plastic_yield")
-    plastic_mode    = ScalarField("plastic_mode")
-    mean_stress     = ScalarField("mean_stress")
-    viscosity       = ScalarField("viscosity")
-    threshold_ratio = ScalarField("threshold_ratio")
-    temperature     = ScalarField("temperature")
-    fluid_pressure  = ScalarField("fluid_pressure")
-    darcy_vel       = VectorField("darcy_vel")
-    heat_flux       = VectorField("heat_flux")
 
     def __init__(self, grid: pv.UnstructuredGrid, schema: ModelSchema):
         self.grid = grid
@@ -175,8 +47,7 @@ class Model:
         path : str or Path
             Path to the mesh file.
         schema : ModelSchema or str
-            Schema instance or name of a built-in schema (e.g. `"adeli"``,
-             ``"adeli2"``).
+            Schema instance or name of built-in schema (e.g. ``"adeli"``, ``"adeli2"``).
 
         Returns
         -------
@@ -185,6 +56,121 @@ class Model:
         if isinstance(schema, str):
             schema = ModelSchema.builtin(schema)
         return cls(load_solver_output(path, schema), schema)
+
+    # tensors
+
+    @cached_property
+    def strain(self) -> np.ndarray:
+        """Total strain tensor :math:`\\varepsilon_{ij}`, shape (N, 3, 3)."""
+        return self._assemble_tensor("strain")
+
+    @cached_property
+    def strain_rate(self) -> np.ndarray:
+        """Total strain rate tensor :math:`\\dot{\\varepsilon}_{ij}`, shape (N, 3, 3)."""
+        return self._assemble_tensor("strain_rate")
+
+    # kinematics
+
+    @cached_property
+    def u(self) -> np.ndarray:
+        """Displacement vector :math:`u_i`, shape (N, 3)."""
+        return self.get("u")
+
+    @cached_property
+    def v(self) -> np.ndarray:
+        """Velocity vector :math:`v_i`, shape (N, 3)."""
+        return self.get("v")
+
+    @cached_property
+    def t(self) -> np.ndarray:
+        """Time field :math:`t`, shape (N,)."""
+        return self.get("t")
+
+    # scalar fields
+
+    @cached_property
+    def i1_strain(self) -> np.ndarray:
+        """First strain invariant :math:`I_1(\\varepsilon) = \\mathrm{tr}\\, \\varepsilon`, shape (N,)."""
+        return self.get("i1_strain")
+
+    @cached_property
+    def j2_strain(self) -> np.ndarray:
+        """Second deviatoric strain invariant :math:`J_2(\\varepsilon) = \\tfrac{1}{2} e_{ij} e_{ij}`, shape (N,)."""
+        return self.get("j2_strain")
+
+    @cached_property
+    def j2_stress(self) -> np.ndarray:
+        """Second deviatoric stress invariant :math:`J_2(\\sigma) = \\tfrac{1}{2} s_{ij} s_{ij}`, shape (N,)."""
+        return self.get("j2_stress")
+
+    @cached_property
+    def i1_strain_rate(self) -> np.ndarray:
+        """First strain rate invariant :math:`I_1(\\dot{\\varepsilon}) = \\mathrm{tr}\\,\\dot{\\varepsilon}`, shape (N,)."""
+        return self.get("i1_strain_rate")
+
+    @cached_property
+    def j2_strain_rate(self) -> np.ndarray:
+        """Second deviatoric strain rate invariant :math:`J_2(\\dot{\\varepsilon})`,
+        shape (N,)."""
+        return self.get("j2_strain_rate")
+
+    @cached_property
+    def plastic_eff(self) -> np.ndarray:
+        """Effective plastic strain :math:`\\varepsilon^p_{\\mathrm{eff}}`, shape (N,
+        )."""
+        return self.get("plastic_eff")
+
+    @cached_property
+    def plastic_vol(self) -> np.ndarray:
+        """Volumetric plastic strain :math:`\\varepsilon^p_{\\mathrm{vol}}`,
+        shape (N,)."""
+        return self.get("plastic_vol")
+
+    @cached_property
+    def plastic_yield(self) -> np.ndarray:
+        """Plastic yield indicator, shape (N,)."""
+        return self.get("plastic_yield")
+
+    @cached_property
+    def plastic_mode(self) -> np.ndarray:
+        """Plastic failure mode, shape (N,)."""
+        return self.get("plastic_mode")
+
+    @cached_property
+    def mean_stress(self) -> np.ndarray:
+        """Mean stress (pressure) :math:`p = \\tfrac{1}{3}\\,\\mathrm{tr}\\,\\sigma`,
+        shape (N,)."""
+        return self.get("mean_stress")
+
+    @cached_property
+    def viscosity(self) -> np.ndarray:
+        """Effective viscosity :math:`\\eta`, shape (N,)."""
+        return self.get("viscosity")
+
+    @cached_property
+    def threshold_ratio(self) -> np.ndarray:
+        """Yield threshold ratio, shape (N,)."""
+        return self.get("threshold_ratio")
+
+    @cached_property
+    def temperature(self) -> np.ndarray:
+        """Temperature field :math:`T`, shape (N,)."""
+        return self.get("temperature")
+
+    @cached_property
+    def fluid_pressure(self) -> np.ndarray:
+        """Fluid pressure :math:`p_f`, shape (N,)."""
+        return self.get("fluid_pressure")
+
+    @cached_property
+    def darcy_vel(self) -> np.ndarray:
+        """Darcy velocity vector :math:`q_i`, shape (N, 3)."""
+        return self.get("darcy_vel")
+
+    @cached_property
+    def heat_flux(self) -> np.ndarray:
+        """Heat flux vector :math:`q^T_i`, shape (N, 3)."""
+        return self.get("heat_flux")
 
     # geometry
 
@@ -199,8 +185,8 @@ class Model:
         return self.grid.number_of_cells
 
     @cached_property
-    def volumes(self) -> np.ndarray:
-        """Cell volumes, shape (N,)."""
+    def cell_volumes(self) -> np.ndarray:
+        """Cell volumes :math:`V_c`, shape (N,)."""
         return self.grid.compute_cell_sizes().cell_data["Volume"]
 
     @cached_property
@@ -213,7 +199,7 @@ class Model:
     @cached_property
     def stress(self) -> np.ndarray:
         """
-        Full stress tensor, shape (N, 3, 3).
+        Full stress tensor :math:`\\sigma_{ij}`, shape (N, 3, 3).
 
         Assembled from the schema tensor if available. Otherwise, reconstructed from
         principal values and directions.
@@ -223,20 +209,7 @@ class Model:
                 return self._assemble_tensor("stress")
             except KeyError:
                 log.warning("Full stress tensor not found")
-        return self._reconstruct_stress()
 
-    @cached_property
-    def stress_dev(self) -> np.ndarray:
-        """
-        Deviatoric stress tensor, shape (N, 3, 3).
-
-        Computed as ``stress - (1/3) tr(stress) I`` per cell.
-        """
-        s = self.stress
-        trace = np.trace(s, axis1=1, axis2=2)
-        return s - (trace / 3.0)[:, None, None] * np.eye(3)
-
-    def _reconstruct_stress(self) -> np.ndarray:
         required = ("val_s1", "val_s3", "dir_s1", "dir_s3")
         missing = [
             k for k in required
@@ -246,24 +219,32 @@ class Model:
         if missing:
             raise KeyError(f"Cannot assemble stress — missing: {missing}")
         log.warning("Reconstructing stress tensor from principals.")
-        v1, v3 = self.val_s1, self.val_s3
-        v2 = -(v1 + v3)
-        d1, d2, d3 = self.dir_s1, self.dir_s2, self.dir_s3
-        return (
-            v1[:, None, None] * (d1[:, :, None] * d1[:, None, :])
-            + v2[:, None, None] * (d2[:, :, None] * d2[:, None, :])
-            + v3[:, None, None] * (d3[:, :, None] * d3[:, None, :])
-        )
+        vals = np.column_stack([self.val_s1, self.val_s2, self.val_s3])
+        dirs = np.stack([self.dir_s1, self.dir_s2, self.dir_s3], axis=-1)
+        return tensor.reconstruct_from_principals(vals, dirs)
+
+    @cached_property
+    def stress_dev(self) -> np.ndarray:
+        r"""
+        Deviatoric stress tensor, shape (N, 3, 3).
+
+        .. math::
+
+           s_{ij} = \sigma_{ij} - \tfrac{1}{3}\,\sigma_{kk}\,\delta_{ij}
+        """
+        s = self.stress
+        trace = np.trace(s, axis1=1, axis2=2)
+        return s - (trace / 3.0)[:, None, None] * np.eye(3)
 
     # strain
 
     @cached_property
     def strain_plastic(self) -> np.ndarray:
         """
-        Plastic strain tensor, shape (N, 3, 3).
+        Plastic strain tensor :math:`\\varepsilon^p_{ij}`, shape (N, 3, 3).
 
         Loaded from schema if available. Otherwise, reconstructed from
-        ``plastic_eff`` and ``plastic_vol`` assuming isotropic flow rules).
+        ``plastic_eff`` and ``plastic_vol`` assuming isotropic flow rules.
         """
         if "strain_plastic" in self.schema.tensors:
             try:
@@ -272,26 +253,7 @@ class Model:
                 log.warning(
                     "strain_plastic missing — reconstructing assuming coaxiality."
                 )
-        return self._reconstruct_plastic_strain()
 
-    @cached_property
-    def strain_elastic(self) -> np.ndarray:
-        """
-        Elastic strain tensor, shape (N, 3, 3).
-
-        Loaded from schema if available, otherwise computed as ``strain -
-        strain_plastic``.
-        """
-        if "strain_elastic" in self.schema.tensors:
-            try:
-                return self._assemble_tensor("strain_elastic")
-            except KeyError:
-                log.warning(
-                    "strain_elastic missing. Computing as total - plastic."
-                )
-        return self.strain - self.strain_plastic
-
-    def _reconstruct_plastic_strain(self) -> np.ndarray:
         try:
             eff = self.plastic_eff
             vol = self.plastic_vol
@@ -302,30 +264,41 @@ class Model:
         if np.all(eff == 0) and np.all(vol == 0):
             return np.zeros((self.n_cells, 3, 3))
 
-        d1, d2, d3 = self.dir_s1, self.dir_s2, self.dir_s3
-        s1, s2, s3 = self.val_s1, self.val_s2, self.val_s3
-        dev = np.column_stack([s1, s2, s3])
-
+        dev = np.column_stack([self.val_s1, self.val_s2, self.val_s3])
         j2 = np.sqrt(0.5 * np.sum(dev**2, axis=1, keepdims=True))
         j2 = np.where(j2 < 1e-30, 1.0, j2)
         shape = dev / j2
 
-        ep_dev = eff[:, None] * shape
-        ep = ep_dev + (vol / 3.0)[:, None]
+        ep = eff[:, None] * shape + (vol / 3.0)[:, None]
+        dirs = np.stack([self.dir_s1, self.dir_s2, self.dir_s3], axis=-1)
+        return tensor.reconstruct_from_principals(ep, dirs)
 
-        return (
-            ep[:, 0, None, None] * (d1[:, :, None] * d1[:, None, :])
-            + ep[:, 1, None, None] * (d2[:, :, None] * d2[:, None, :])
-            + ep[:, 2, None, None] * (d3[:, :, None] * d3[:, None, :])
-        )
+    @cached_property
+    def strain_elastic(self) -> np.ndarray:
+        r"""
+        Elastic strain tensor, shape (N, 3, 3).
 
+        Loaded from schema if available, otherwise computed as
+
+        .. math::
+
+           \varepsilon^e_{ij} = \varepsilon_{ij} - \varepsilon^p_{ij}
+        """
+        if "strain_elastic" in self.schema.tensors:
+            try:
+                return self._assemble_tensor("strain_elastic")
+            except KeyError:
+                log.warning(
+                    "strain_elastic missing. Computing as total - plastic."
+                )
+        return self.strain - self.strain_plastic
 
     # principal stress directions
+
     @cached_property
     def dir_s1(self) -> np.ndarray:
-        """
-        Maximum compressive principal stress direction, shape (N, 3).
-        """
+        """Maximum compressive principal stress direction :math:`\\mathbf{n}_1`,
+        shape (N, 3)."""
         if "dir_s1" in self.grid.array_names:
             return self.get("dir_s1")
         else:
@@ -333,9 +306,8 @@ class Model:
 
     @cached_property
     def dir_s2(self) -> np.ndarray:
-        """
-        Intermediate principal stress direction, shape (N, 3).
-        """
+        """Intermediate principal stress direction :math:`\\mathbf{n}_2`, shape (N,
+        3)."""
         if "dir_s2" in self.grid.array_names:
             return self.get("dir_s2")
         elif "dir_s3" in self.grid.array_names:
@@ -347,21 +319,19 @@ class Model:
 
     @cached_property
     def dir_s3(self) -> np.ndarray:
-        """
-        Minimum compressive principal stress direction, shape (N, 3).
-        """
+        """Minimum compressive principal stress direction :math:`\\mathbf{n}_3`,
+        shape (N, 3)."""
         if "dir_s3" in self.grid.array_names:
             return self.get("dir_s3")
         else:
             return self.eigenvectors("stress")[:, :, 0]
-
 
     # eigendecomposition
 
     def eigenvectors(self, name: str) -> np.ndarray:
         """
         Eigenvectors of a tensor field, sorted by ascending eigenvalue (in continuum
-        mechanics convention: compression is negative)
+        mechanics convention: compression is negative).
 
         Parameters
         ----------
@@ -375,12 +345,10 @@ class Model:
         """
         return tensor.eigenvectors(getattr(self, name))
 
-    # principal stress values
-
     def eigenvalues(self, name: str) -> np.ndarray:
         """
         Eigenvalues of a tensor field, sorted ascending (in continuum mechanics
-         convention: compression is negative).
+        convention: compression is negative).
 
         Parameters
         ----------
@@ -394,10 +362,12 @@ class Model:
         """
         return tensor.eigenvalues(getattr(self, name))
 
+    # principal stress values
+
     @cached_property
     def val_s1(self) -> np.ndarray:
         """
-        Most compressive principal stress value, shape (N,).
+        Most compressive principal stress :math:`\\sigma_1`, shape (N,).
 
         Loaded from the grid if available, otherwise the smallest eigenvalue
         of the stress tensor.
@@ -409,7 +379,7 @@ class Model:
     @cached_property
     def val_s2(self) -> np.ndarray:
         """
-        Intermediate principal stress value, shape (N,).
+        Intermediate principal stress :math:`\\sigma_2`, shape (N,).
 
         Loaded from the grid if available, otherwise computed as
         ``-(val_s1 + val_s3)`` (deviatoric trace-free condition).
@@ -421,7 +391,7 @@ class Model:
     @cached_property
     def val_s3(self) -> np.ndarray:
         """
-        Least compressive principal stress value, shape (N,).
+        Least compressive principal stress :math:`\\sigma_3`, shape (N,).
 
         Loaded from the grid if available, otherwise the largest eigenvalue
         of the stress tensor.
@@ -497,8 +467,15 @@ class Model:
     # averages
 
     def avg_tensor(self, name: str) -> np.ndarray:
-        """
-        Volume-weighted average of a tensor field.
+        r"""
+        Cell-volume-weighted average of a tensor field.
+
+        .. math::
+
+           \bar{T}_{ij} = \frac{\sum_c V_c\, T_{ij}^{(c)}}{\sum_c V_c}
+
+        where :math:`V_c` is the volume of cell :math:`c` and
+        :math:`T_{ij}^{(c)}` is the tensor value at that cell.
 
         Parameters
         ----------
@@ -513,20 +490,14 @@ class Model:
         numpy.ndarray, shape (3, 3)
             Symmetric average tensor.
         """
-        computed = {
-            "stress", "stress_dev", "strain", "strain_rate",
-            "strain_plastic", "strain_elastic",
-        }
-        tensors = (
-            getattr(self, name) if name in computed
-            else self._assemble_tensor(name)
-        )
-        w = self.volumes
-        return np.einsum("ijk,i->jk", tensors, w) / w.sum()
+        t = getattr(self, name)
+        w = self.cell_volumes
+        avg = np.einsum("ijk,i->jk", t, w) / w.sum()
+        return 0.5 * (avg + avg.T)
 
     def avg_principals(self, name: str = "stress") -> tuple:
         """
-        Eigendecompose the volume-weighted average of a tensor field.
+        Eigenvectors of the the volume-weighted average of a tensor field.
 
         Parameters
         ----------

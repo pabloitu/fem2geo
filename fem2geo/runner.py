@@ -11,11 +11,11 @@ log = logging.getLogger("fem2geoLogger")
 
 _JOBS = {
     "principal_directions": "fem2geo.jobs.principal_directions",
-    "tendency":        "fem2geo.jobs.tendency",
-    "fracture":    "fem2geo.jobs.fracture",
+    "tendency":             "fem2geo.jobs.tendency",
+    "fracture":             "fem2geo.jobs.fracture",
     "resolved_shear":       "fem2geo.jobs.resolved_shear",
-    "kostrov":     "fem2geo.jobs.kostrov",
-    "project":     "fem2geo.jobs.project",
+    "kostrov":              "fem2geo.jobs.kostrov",
+    "project":              "fem2geo.jobs.project",
 }
 
 
@@ -29,13 +29,12 @@ def load_config(path: Path) -> dict:
     return cfg
 
 
-def parse_config(cfg: dict, job_dir: Path) -> tuple:
+def resolve_output(cfg: dict, job_dir: Path) -> dict:
     """
-    Parse the shared top-level config keys.
+    Resolve the output directory and create it.
 
-    Returns the schema (constructed from the config) and the raw
-    section dicts for zone, plot, and output. Creates the output
-    directory if it doesn't exist.
+    Returns the ``output`` block with ``dir`` resolved to an absolute
+    Path. Creates the directory if it doesn't exist.
 
     Parameters
     ----------
@@ -47,24 +46,14 @@ def parse_config(cfg: dict, job_dir: Path) -> tuple:
 
     Returns
     -------
-    schema : ModelSchema
-    zone : dict
-    plot : dict
-    out : dict
-        Output config with ``dir`` resolved to an absolute Path.
+    dict
+        The output config with ``dir`` set to an absolute Path.
     """
-    from fem2geo.internal.schema import ModelSchema
-
-    schema = ModelSchema.builtin(
-        cfg.get("schema", "adeli"), units=cfg.get("units")
-    )
-    zone = cfg.get("zone", {})
-    data = cfg.get("data", {})
-    plot = cfg.get("plot", {})
-    out = cfg.get("output", {})
+    out = dict(cfg.get("output", {}))
     out["dir"] = Path(out.get("dir", job_dir)).resolve()
     out["dir"].mkdir(parents=True, exist_ok=True)
-    return schema, zone, data, plot, out
+    return out
+
 
 def run(job_path: Path, output_dir: Path = None) -> None:
     """
@@ -107,15 +96,9 @@ def run(job_path: Path, output_dir: Path = None) -> None:
 def main() -> None:
     setup_logger()
 
-    # subcommand dispatch — if first arg is a known command, handle it
-    # separately so the original `fem2geo config.yaml` syntax still works
-    if len(sys.argv) > 1 and sys.argv[1] in ("download-tutorials",):
-        from fem2geo.internal.tutorials import register
-        parser = argparse.ArgumentParser(prog="fem2geo")
-        subparsers = parser.add_subparsers(dest="command", required=True)
-        register(subparsers)
-        args = parser.parse_args()
-        sys.exit(args.func(args) or 0)
+    if len(sys.argv) > 1 and sys.argv[1] == "download-tutorials":
+        from fem2geo.internal.tutorials import run_download
+        sys.exit(run_download() or 0)
 
     parser = argparse.ArgumentParser(
         prog="fem2geo",

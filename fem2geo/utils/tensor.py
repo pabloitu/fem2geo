@@ -9,12 +9,13 @@ __all__ = [
     "eigenvalues",
     "eigenvectors",
     "rot_tensor",
-    "ensure_normals",
+    "validate_normals",
+    "reconstruct_from_principals",
     "resolved_shear_enu",
-    "resolved_rakes",
+    "resolved_rake",
     "slip_tendency",
     "dilation_tendency",
-    "combined_tendency",
+    "summarized_tendency",
     "kostrov_tensor",
     "axes_misfit",
 ]
@@ -29,7 +30,7 @@ _COMP_IDX = {
 }
 
 
-def unpack_voigt6(packed):
+def unpack_voigt6(tensor_voight):
     """
     Unpack (N, 6) Voigt-ordered array into (N, 3, 3) symmetric tensors.
 
@@ -37,18 +38,18 @@ def unpack_voigt6(packed):
 
     Parameters
     ----------
-    packed : array-like, shape (N, 6)
+    tensor_voight : array-like, shape (N, 6)
 
     Returns
     -------
     numpy.ndarray, shape (N, 3, 3)
     """
-    packed = np.asarray(packed, dtype=float)
-    n = packed.shape[0]
+    tensor_voight = np.asarray(tensor_voight, dtype=float)
+    n = tensor_voight.shape[0]
     t = np.zeros((n, 3, 3))
     for col, (i, j) in enumerate(_VOIGT_MAP):
-        t[:, i, j] = packed[:, col]
-        t[:, j, i] = packed[:, col]
+        t[:, i, j] = tensor_voight[:, col]
+        t[:, j, i] = tensor_voight[:, col]
     return t
 
 
@@ -120,17 +121,13 @@ def rot_tensor(tensor, angle, axis):
     angle : float
         Rotation angle in degrees.
     axis : int
-        Axis index: 1=x(E), 2=y(N), 3=z(U).
+        Axis index: 0=x(E), 1=y(N), 2=z(U).
 
     Returns
     -------
     numpy.ndarray, shape (3, 3)
         Rotated tensor.
 
-    Raises
-    ------
-    ValueError
-        If tensor is not shape (3, 3) or axis is not in {1, 2, 3}.
     """
     T = np.asarray(tensor, dtype=float)
     if T.shape != (3, 3):
@@ -139,19 +136,19 @@ def rot_tensor(tensor, angle, axis):
     a = np.deg2rad(angle)
     c, s = np.cos(a), np.sin(a)
 
-    if axis == 3:
+    if axis == 2:
         R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-    elif axis == 2:
-        R = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
     elif axis == 1:
+        R = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+    elif axis == 0:
         R = np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]])
     else:
-        raise ValueError("axis must be one of {1, 2, 3}.")
+        raise ValueError("axis must be one of {0, 1, 2}.")
 
     return R @ T @ R.T
 
 
-def ensure_normals(normals):
+def validate_normals(normals):
     """
     Validate and normalize ENU normal vectors.
 
@@ -165,10 +162,6 @@ def ensure_normals(normals):
     numpy.ndarray, shape (N, 3)
         Unit normal vector(s), always 2-D.
 
-    Raises
-    ------
-    ValueError
-        If any normal is zero or shape is invalid.
     """
     normals = np.asarray(normals, dtype=float)
     if normals.ndim == 1:
@@ -186,6 +179,29 @@ def ensure_normals(normals):
     if np.any(nn == 0):
         raise ValueError("normal vectors must be non-zero.")
     return n / nn[:, None]
+
+
+def reconstruct_from_principals(values, directions):
+    """
+    Build symmetric tensors from principal values and directions.
+
+    Computes the dyad sum :math:`\\sum_i v_i (d_i \\otimes d_i)` per cell.
+
+    Parameters
+    ----------
+    values : array-like, shape (N, 3)
+        Principal values per cell, columns ordered to match directions.
+    directions : array-like, shape (N, 3, 3)
+        Principal directions stored as columns: ``directions[:, :, i]``
+        is the i-th eigenvector.
+
+    Returns
+    -------
+    numpy.ndarray, shape (N, 3, 3)
+    """
+    values = np.asarray(values, dtype=float)
+    directions = np.asarray(directions, dtype=float)
+    return np.einsum("ni,nji,nki->njk", values, directions, directions)
 
 
 def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
@@ -208,23 +224,14 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     tau : float
         Shear traction magnitude (always non-negative).
     tau_hat : numpy.ndarray, shape (3,)
-        Directed unit shear traction vector in ENU. No sign
-        canonicalization is applied, so the vector carries
-        kinematic sense.
-
-    Raises
-    ------
-    ValueError
-        If sigma has invalid shape or both/neither plane and
-        normal are provided.
+        Directed unit shear traction vector in ENU. Vector carries kinematic sense.
 
     Notes
     -----
     ``tau_hat`` is the direction in which material on the
     positive-normal side of the plane is pushed by shear stress.
-    For Wallace-Bott comparison, it can be compared directly with
-    the observed slip vector (e.g. from a signed rake).
     """
+
     S = np.asarray(sigma, dtype=float)
     if S.shape != (3, 3):
         raise ValueError("sigma must be shape (3, 3).")
@@ -236,7 +243,7 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
         plane = np.asarray(plane, dtype=float)
         n = tr.plane_sphe2enu(plane[0], plane[1])
     else:
-        n = ensure_normals(normal)[0]
+        n = validate_normals(normal)[0]
 
     t = S @ n
     t_n = np.dot(t, n) * n
@@ -249,7 +256,7 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     return mag, t_s / mag
 
 
-def resolved_rakes(sigma, strikes, dips, eps=1e-12):
+def resolved_rake(sigma, strikes, dips, eps=1e-12):
     """
     Predicted slip rake from resolved shear traction on each fault.
 
@@ -312,10 +319,6 @@ def axes_misfit(vecs_a, vecs_b):
         Eigenvectors as columns (e.g. from Kostrov tensor).
     vecs_b : array-like, shape (3, 3)
         Eigenvectors as columns (e.g. from model tensor).
-    labels_a : list of str, optional
-        Names for axes in ``vecs_a`` (for the returned dict).
-    labels_b : list of str, optional
-        Names for axes in ``vecs_b`` (for the returned dict).
 
     Returns
     -------
@@ -398,7 +401,7 @@ def slip_tendency(sigma, strikes, dips, eps=1e-12):
     raw[np.abs(sigma_n) < eps] = 0.0
 
     # Ts_max from the three 2D Mohr circles
-    ts_max = _ts_max(S, eps)
+    ts_max = mohr_ts_max(S, eps)
     if ts_max < eps:
         out = np.zeros_like(raw)
     else:
@@ -408,7 +411,7 @@ def slip_tendency(sigma, strikes, dips, eps=1e-12):
     return float(out[0]) if scalar else out
 
 
-def _ts_max(sigma, eps=1e-12):
+def mohr_ts_max(sigma, eps=1e-12):
     """
     Maximum slip tendency for a stress state.
 
@@ -452,8 +455,8 @@ def dilation_tendency(sigma, strikes, dips, eps=1e-12):
     Notes
     -----
     For :math:`\\sigma_1` = min(eigenvalues), :math:`\\sigma_3` = max(eigenvalues) and
-    near-isotropic
-    tensors where :math:`|\\sigma_1 - \\sigma_3| < \\epsilon`, returns NaN.
+    near-isotropic tensors where :math:`|\\sigma_1 - \\sigma_3| < \\epsilon`,
+    returns NaN.
 
     """
     S = np.asarray(sigma, dtype=float)
@@ -485,9 +488,9 @@ def dilation_tendency(sigma, strikes, dips, eps=1e-12):
     return float(out[0]) if scalar else out
 
 
-def combined_tendency(sigma, strikes, dips, eps=1e-12):
+def summarized_tendency(sigma, strikes, dips, eps=1e-12):
     """
-    Combined reactivation tendency: Ts' + Td.
+    Summarized reactivation tendency: Ts' + Td.
 
     Sums the normalized slip tendency (Morris et al., 1996) and the
     dilation tendency (Ferrill et al., 1999). Both components are in

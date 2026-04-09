@@ -1,9 +1,7 @@
-from dataclasses import dataclass, asdict
-
 import mplstereonet
 import numpy as np
 
-from fem2geo.utils.transform import line_rake2sphe
+from fem2geo.utils.transform import line_enu2sphe, line_rake2sphe
 
 
 MODEL_COLORS = [
@@ -18,34 +16,28 @@ MODEL_COLORS = [
 ]
 
 
-@dataclass
-class PlotConfig:
+def get_style(default, *overrides, drop=("show", "style"), **kw):
     """
-    Bag of matplotlib style parameters. Fields left as None are omitted
-    when passed to matplotlib, so the library defaults apply.
+    Merge style dicts into a matplotlib-ready kwargs dict.
+
+    Parameters
+    ----------
+    default : dict
+        Base style.
+    *overrides : dict
+        Successive override dicts (typically user config).
+    drop : tuple of str
+        Keys to strip from the result.
+    **kw
+        Final per-call overrides (e.g. ``marker="o"``).
     """
-    color:           str   = None
-    marker:          str   = None
-    markersize:      float = None
-    markeredgecolor: str   = None
-    alpha:           float = None
-    linewidth:       float = None
-    levels:          int   = None
-    sigma:           float = None
-
-    def update(self, overrides=None, **kw):
-        """Return a new PlotConfig with overrides applied."""
-        if isinstance(overrides, dict):
-            kw = {**overrides, **kw}
-        valid = {
-            k: v for k, v in kw.items()
-            if k in self.__dataclass_fields__ and v is not None
-        }
-        return PlotConfig(**{**asdict(self), **valid})
-
-    def kwargs(self):
-        """Return non-None fields as a dict for matplotlib."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
+    out = dict(default)
+    for o in overrides:
+        out.update(o)
+    out.update(kw)
+    for k in drop:
+        out.pop(k, None)
+    return out
 
 
 def stereo_field(
@@ -153,9 +145,8 @@ def stereo_slip_arrow(
     """
     Draw slip direction arrows on a stereonet for fault planes.
 
-    Accepts scalar or array inputs. Each arrow is anchored at the
-    slip line's stereonet position and points toward the pole for
-    reverse sense (rake > 0) or away for normal sense (rake < 0),
+    Each arrow is anchored at the slip line's stereonet position and points toward
+    the pole for reverse sense (rake > 0) or away for normal sense (rake < 0),
     following the Aki & Richards convention.
 
     Parameters
@@ -203,7 +194,7 @@ def stereo_slip_arrow(
 
 
 def stereo_contour(
-    ax, plunge, azimuth=None, label=None,
+    ax, plunge, azimuth=None,
     color="k", levels=4, sigma=2, linewidth=1.0, **kwargs,
 ):
     """
@@ -215,3 +206,50 @@ def stereo_contour(
         plunge, azimuth, measurement="lines", colors=color,
         levels=levels, sigma=sigma, linewidths=linewidth, **kwargs,
     )
+
+
+def stereo_axes(ax, vecs, style, labels=None, markers=("o", "s", "v")):
+    """
+    Plot a 3-axis frame on a stereonet as line markers.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    vecs : numpy.ndarray
+        Either (3, 3) for a single frame or (N, 3, 3) for N frames.
+        Axes are stored as columns: ``vecs[..., :, i]`` is the i-th axis.
+    style : dict
+        Base style. Marker is overridden per axis.
+    labels : tuple of str, optional
+        Three labels for the legend.
+    markers : tuple of str
+        Markers for axes 1, 2, 3. Defaults to circle, square, triangle.
+    """
+    vecs = np.asarray(vecs)
+    if vecs.ndim == 2:
+        vecs = vecs[None, :, :]
+    for i in range(3):
+        p, a = line_enu2sphe(vecs[:, :, i])
+        label = labels[i] if labels is not None else None
+        stereo_line(ax, p, a, label=label, **{**style, "marker": markers[i]})
+
+
+def stereo_axes_contour(ax, vecs, style):
+    """
+    Plot a 3-axis frame on a stereonet as density contours.
+
+    Parameters
+    ----------
+    ax : mplstereonet axes
+    vecs : numpy.ndarray
+        Either (3, 3) for a single frame or (N, 3, 3) for N frames.
+        Axes are columns: ``vecs[..., :, i]`` is the i-th axis.
+    style : dict
+        Contour style (color, levels, sigma, linewidth).
+    """
+    vecs = np.asarray(vecs)
+    if vecs.ndim == 2:
+        vecs = vecs[None, :, :]
+    for i in range(3):
+        p, a = line_enu2sphe(vecs[:, :, i])
+        stereo_contour(ax, p, a, **style)

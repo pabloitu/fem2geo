@@ -17,8 +17,6 @@ Config reference
 ----------------
 job: tendency
 schema: adeli               # built-in schema name (default: adeli)
-units:                      # optional category-level unit overrides
-  pressure: Pa
 
 model: path/to/model.vtk    # relative to this config file
 
@@ -66,30 +64,32 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
-    PlotConfig,
     MODEL_COLORS,
+    get_style,
     stereo_field,
-    stereo_line,
-    stereo_contour,
+    stereo_axes,
+    stereo_axes_contour,
     stereo_pole,
 )
-from fem2geo.runner import parse_config
-from fem2geo.utils.tensor import slip_tendency, dilation_tendency, combined_tendency
-from fem2geo.utils.transform import line_enu2sphe, grid_nodes, grid_centers
+from fem2geo.runner import resolve_output
+from fem2geo.utils.tensor import slip_tendency, dilation_tendency, summarized_tendency
+from fem2geo.utils.transform import grid_nodes, grid_centers
 
 log = logging.getLogger("fem2geoLogger")
 
 _VALID_TENDENCIES = ("slip", "dilation", "combined", "both")
 
 # Plot defaults
-AVG_STYLE = PlotConfig(color="white", markersize=8, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="k", markersize=3, alpha=0.4)
-CONTOUR_STYLE = PlotConfig(color="k", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(markersize=5, alpha=0.7, marker="+")
+AVG_STYLE = {"color": "white", "markersize": 8, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "k", "markersize": 3, "alpha": 0.4}
+CONTOUR_STYLE = {"color": "k", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+DATA_STYLE = {"markersize": 5, "alpha": 0.7, "marker": "+"}
 
 _CBAR_LABELS = {
     "slip": r"Slip tendency $T'_s$",
@@ -106,7 +106,7 @@ _TITLES = {
 TENDENCY_FUNCTIONS = {
     "slip": slip_tendency,
     "dilation": dilation_tendency,
-    "combined": combined_tendency,
+    "combined": summarized_tendency,
 }
 
 
@@ -116,8 +116,11 @@ _VMAX = {"slip": 1.0, "dilation": 1.0, "combined": 2.0}
 def run(cfg: dict, job_dir: Path) -> None:
 
     # load config
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     tendency = plot.get("tendency", "both")
     n_strikes = plot.get("n_strikes", 180)
@@ -126,14 +129,13 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)
-    avg_style = AVG_STYLE.update(avg_cfg)
+    avg_style = get_style(AVG_STYLE, avg_cfg)
 
     cell_cfg = plot.get("cell_directions", {})
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(
-        cell_cfg
-    )
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
 
     # load model and extract zone
     path = (job_dir / cfg["model"]).resolve()
@@ -186,39 +188,22 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell directions
     if show_cell:
-        p1, a1 = line_enu2sphe(sub.dir_s1)
-        p2, a2 = line_enu2sphe(sub.dir_s2)
-        p3, a3 = line_enu2sphe(sub.dir_s3)
+        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
         for ax in panels.values():
             if cell_style == "contour":
-                kw = cell_pc.kwargs()
-                stereo_contour(ax, p1, a1, **kw)
-                stereo_contour(ax, p2, a2, **kw)
-                stereo_contour(ax, p3, a3, **kw)
+                stereo_axes_contour(ax, cell_vecs, cell_pc)
             else:
-                stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
-                stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
-                stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
+                stereo_axes(ax, cell_vecs, cell_pc)
 
     # average principal directions
     if show_avg:
-        p1, a1 = line_enu2sphe(vec[:, 0])
-        p2, a2 = line_enu2sphe(vec[:, 1])
-        p3, a3 = line_enu2sphe(vec[:, 2])
+        labels = (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$")
         for ax in panels.values():
-            stereo_line(
-                ax, p1, a1, label=r"$\sigma_1$", **avg_style.update(marker="o").kwargs()
-            )
-            stereo_line(
-                ax, p2, a2, label=r"$\sigma_2$", **avg_style.update(marker="s").kwargs()
-            )
-            stereo_line(
-                ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs()
-            )
+            stereo_axes(ax, vec, avg_style, labels=labels)
 
     # fracture data overlays
     if cfg.get("data"):
-        data_style = DATA_STYLE.update(plot.get("data", {}))
+        data_style = get_style(DATA_STYLE, plot.get("data", {}))
         data_colors = MODEL_COLORS[1 : len(cfg["data"]) + 1]
         for color, (name, path) in zip(data_colors, cfg["data"].items()):
             fd = load_structural_csv((job_dir / path).resolve())
@@ -228,7 +213,7 @@ def run(cfg: dict, job_dir: Path) -> None:
                     fd.planes[:, 0],
                     fd.planes[:, 1],
                     label=name,
-                    **data_style.update(color=color).kwargs(),
+                    **get_style(data_style, color=color),
                 )
 
     # plots

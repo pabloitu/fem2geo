@@ -40,6 +40,7 @@ dependencies = [
     "meshio",
     "pyvista",
     "mplstereonet",
+    "pandas",
     "pyproj",
     "pyyaml",
     "rasterio"

@@ -9,14 +9,13 @@ from fem2geo.utils.projections import (
 
 class Projector:
     """
-    Transform georeferenced coordinates into a local cartesian frame.
+    Transform georeferenced coordinates into a real-world or local cartesian frame.
 
     A Projector holds a source/destination CRS pair, unit and sign
     conventions for XY and Z, and an optional alignment anchor that
     pins a chosen geographic point to a chosen local coordinate, with
-    optional rotation around that anchor. Once built, the same
-    Projector can be applied to raw arrays, CatalogData objects, or
-    PyVista meshes.
+    optional rotation around that anchor. Projector can be used to transform raw
+    arrays, CatalogData objects, or meshes.
 
     Parameters
     ----------
@@ -199,10 +198,9 @@ class Projector:
         """
         Project a PyVista mesh into the local frame.
 
-        Mesh points are assumed to be in ``src_xy_units`` for all
-        three components; ``src_xy_units`` and ``src_z_units`` must
-        match. Cell connectivity and all data arrays are preserved.
-        The input mesh is not modified.
+        Mesh points are assumed to be ENU (Z positive up) with all three
+        components in ``src_xy_units``. Cell connectivity and data arrays
+        are preserved; the input mesh is not modified.
 
         Parameters
         ----------
@@ -218,11 +216,13 @@ class Projector:
                 f"Mesh projection requires src_xy_units == src_z_units; "
                 f"got xy={self.src_xy_units!r}, z={self.src_z_units!r}."
             )
+        if self.src_z_positive != "up":
+            raise ValueError(
+                "Mesh projection requires src_z_positive='up' (ENU)."
+            )
 
         out = mesh.copy()
         pts = np.asarray(out.points, dtype=float)
-        z_in = -pts[:, 2] if self.src_z_positive == "down" else pts[:, 2]
-
-        X, Y, Z = self.transform(pts[:, 0], pts[:, 1], z_in)
+        X, Y, Z = self.transform(pts[:, 0], pts[:, 1], pts[:, 2])
         out.points = np.c_[X, Y, Z]
         return out

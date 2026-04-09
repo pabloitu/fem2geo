@@ -3,49 +3,34 @@ import tempfile
 import os
 import yaml
 
-from fem2geo.internal.schema import ModelSchema, ScalarEntry, TensorEntry, SI_FACTORS
+from fem2geo.internal.schema import ModelSchema
 
 
 _ADELI = {
     "solver": "adeli",
-    "units": {"pressure": "MPa", "distance": "m", "velocity": "cm/a"},
     "tensors": {
         "stress": {
             "components": {
                 "xx": "Sxx", "yy": "Syy", "zz": "Szz",
                 "xy": "Sxy", "yz": "Syz", "zx": "Szx",
             },
-            "category": "pressure",
         },
     },
     "fields": {
         "dir_s1": {"field": "dir_DevStress_1"},
-        "u":      {"field": "Displacement", "category": "distance"},
-        "v":      {"field": "Velocity",     "category": "velocity"},
+        "u":      {"field": "Displacement"},
+        "v":      {"field": "Velocity"},
     },
 }
 
 _PACKED = {
     "solver": "adeli2",
-    "units": {"pressure": "Pa"},
     "tensors": {
-        "stress": {"voigt6": "stresses_(Pa)", "category": "pressure"},
+        "stress": {"voigt6": "stresses_(Pa)"},
         "strain": {"voigt6": "strains_(-)"},
     },
-    "fields": {"val_s1": {"field": "sig1", "category": "pressure"}},
+    "fields": {"val_s1": {"field": "sig1"}},
 }
-
-
-class TestSIFactors(unittest.TestCase):
-
-    def test_ordering(self):
-        self.assertLess(SI_FACTORS["pa"], SI_FACTORS["mpa"])
-        self.assertLess(SI_FACTORS["mm"], SI_FACTORS["m"])
-        self.assertLess(SI_FACTORS["m"], SI_FACTORS["km"])
-
-    def test_all_lowercase(self):
-        for k in SI_FACTORS:
-            self.assertEqual(k, k.lower())
 
 
 class TestScalarFields(unittest.TestCase):
@@ -53,17 +38,16 @@ class TestScalarFields(unittest.TestCase):
     def setUp(self):
         self.s = ModelSchema.from_dict(_ADELI)
 
-    def test_lookup_and_units(self):
+    def test_lookup(self):
         self.assertIn("u", self.s.fields)
-        self.assertEqual(self.s.fields["u"].unit, "m")
-        self.assertAlmostEqual(self.s.fields["u"].si_factor, 1.0)
+        self.assertEqual(self.s.fields["u"].solver_key, "Displacement")
 
-    def test_no_category_gives_none(self):
+    def test_canonical_set(self):
         e = self.s.fields["dir_s1"]
-        self.assertIsNone(e.category)
-        self.assertIsNone(e.unit)
+        self.assertEqual(e.canonical, "dir_s1")
+        self.assertEqual(e.solver_key, "dir_DevStress_1")
 
-    def test_has_missing(self):
+    def test_missing(self):
         self.assertNotIn("nope", self.s.fields)
 
 
@@ -74,7 +58,6 @@ class TestTensors(unittest.TestCase):
         t = s.tensors["stress"]
         self.assertFalse(t.is_packed)
         self.assertEqual(t.components["xx"], "Sxx")
-        self.assertEqual(t.unit, "MPa")
 
     def test_voigt(self):
         s = ModelSchema.from_dict(_PACKED)
@@ -87,22 +70,6 @@ class TestTensors(unittest.TestCase):
         self.assertIn("stress", s.tensors)
         self.assertIn("strain", s.tensors)
         self.assertNotIn("bogus", s.tensors)
-
-    def test_no_unit_gives_none(self):
-        s = ModelSchema.from_dict(_PACKED)
-        self.assertIsNone(s.tensors["strain"].unit)
-
-
-class TestOverrides(unittest.TestCase):
-
-    def test_unit_override_applies(self):
-        s = ModelSchema.from_dict(_ADELI, units={"pressure": "Pa"})
-        self.assertEqual(s.tensors["stress"].unit, "Pa")
-        self.assertAlmostEqual(s.tensors["stress"].si_factor, 1.0)
-
-    def test_override_leaves_others(self):
-        s = ModelSchema.from_dict(_ADELI, units={"pressure": "Pa"})
-        self.assertEqual(s.fields["u"].unit, "m")
 
 
 class TestYamlRoundtrip(unittest.TestCase):
@@ -126,14 +93,6 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(s.name, "custom")
         self.assertEqual(len(s.fields), 0)
         self.assertEqual(len(s.tensors), 0)
-
-    def test_unknown_unit(self):
-        s = ModelSchema.from_dict({
-            "units": {"pressure": "furlong"},
-            "fields": {"f": {"field": "F", "category": "pressure"}},
-        })
-        self.assertEqual(s.fields["f"].unit, "furlong")
-        self.assertIsNone(s.fields["f"].si_factor)
 
     def test_builtin_bad_name(self):
         with self.assertRaises(ValueError) as ctx:

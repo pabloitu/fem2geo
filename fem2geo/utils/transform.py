@@ -1,27 +1,6 @@
-"""
-Coordinate transformations for structural geology.
-
-All functions accept scalar or array inputs and return matching shapes
-(NumPy broadcasting). Two families of line representations:
-
-- ``line_*``: axes (undirected), canonicalized to plunge >= 0 (down-directed).
-  Suitable for stereonet plotting where v and -v are equivalent.
-- ``slip_*``: directed vectors preserving kinematic sense. Uses the Aki &
-  Richards signed rake convention (-180, 180].
-
-Coordinate systems:
-
-- **ENU**: East, North, Up (x, y, z). Internal standard.
-- **NED**: North, East, Down.
-- **Spherical (sphe)**: [plunge, azimuth] in degrees. Plunge positive
-  downward, azimuth clockwise from North.
-- **Plane**: [strike, dip] in degrees, right-hand rule.
-"""
-
 import numpy as np
 
 
-# utilities
 
 def unit(v):
     """
@@ -35,10 +14,6 @@ def unit(v):
     -------
     numpy.ndarray, shape (3,)
 
-    Raises
-    ------
-    ValueError
-        If the vector has zero length.
     """
     v = np.asarray(v, dtype=float)
     n = np.linalg.norm(v)
@@ -76,7 +51,7 @@ def ned2enu(v):
     """
     Convert vector(s) from NED to ENU.
 
-    Same operation as :func:`enu2ned` (the mapping is its own inverse).
+    Same operation as :func:`enu2ned` (inverse mapping).
 
     Parameters
     ----------
@@ -132,7 +107,6 @@ def line_ned2sphe(ned):
     Parameters
     ----------
     ned : array-like, shape (3,) or (N, 3)
-        NED direction cosines (need not be unit; will be normalized).
 
     Returns
     -------
@@ -206,12 +180,11 @@ def plane_basis_enu(strike, dip):
     Orthonormal basis vectors of a fault plane in ENU.
 
     Returns the strike direction, the dip vector (steepest descent line
-    in the plane), and the plane normal. All three are mutually
+    in the plane), and the plane normal_vec. All three are mutually
     orthogonal unit vectors forming a right-handed basis.
 
-    The dip vector plunges at the dip angle toward azimuth
-    ``strike + 90°``. The normal points away from the dipping side
-    (upward for non-vertical planes after canonicalization).
+    The dip vector plunges at the dip angle toward ``strike + 90°``. The normal_vec
+    points away from the dipping side (upward for non-vertical planes).
 
     Parameters
     ----------
@@ -220,12 +193,12 @@ def plane_basis_enu(strike, dip):
 
     Returns
     -------
-    strike_dir : numpy.ndarray, shape (3,) or (N, 3)
+    strike_vec : numpy.ndarray, shape (3,) or (N, 3)
         Horizontal unit vector along the strike azimuth.
     dip_vec : numpy.ndarray, shape (3,) or (N, 3)
         Unit vector plunging at the dip angle toward the dip direction.
-    normal : numpy.ndarray, shape (3,) or (N, 3)
-        Unit normal to the plane (= strike_dir × dip_vec).
+    normal_vec : numpy.ndarray, shape (3,) or (N, 3)
+        Unit normal_vec to the plane (= strike_vec × dip_vec).
     """
     strike = np.asarray(strike, dtype=float)
     dip = np.asarray(dip, dtype=float)
@@ -235,17 +208,17 @@ def plane_basis_enu(strike, dip):
     d = np.deg2rad(dip)
     da = s + np.pi / 2.0
 
-    strike_dir = np.stack([np.sin(s), np.cos(s), np.zeros_like(s)], axis=-1)
+    strike_vec = np.stack([np.sin(s), np.cos(s), np.zeros_like(s)], axis=-1)
     dip_vec = np.stack([
         np.sin(da) * np.cos(d),
         np.cos(da) * np.cos(d),
         -np.sin(d),
     ], axis=-1)
-    normal = np.cross(strike_dir, dip_vec)
+    normal_vec = np.cross(strike_vec, dip_vec)
 
     if scalar:
-        return strike_dir.squeeze(), dip_vec.squeeze(), normal.squeeze()
-    return strike_dir, dip_vec, normal
+        return strike_vec.squeeze(), dip_vec.squeeze(), normal_vec.squeeze()
+    return strike_vec, dip_vec, normal_vec
 
 
 # line-rake conversions (axis, unsigned rake [0, 180])
@@ -391,7 +364,7 @@ def slip_enu2rake(enu, strike, dip):
     Directed ENU vector to signed rake (Aki & Richards).
 
     Projects the vector onto the fault plane's strike and updip directions
-    and returns ``atan2(updip_component, strike_component)`` in degrees.
+    and returns rake in degrees.
 
     Parameters
     ----------
@@ -426,12 +399,10 @@ def slip_enu2rake(enu, strike, dip):
 
 def plane_sphe2enu(strike, dip):
     """
-    Plane (strike/dip) to ENU unit normal, canonicalized U >= 0.
+    Plane (strike/dip) to ENU unit normal.
 
-    Computes the normal as the cross product of the strike direction
-    (horizontal, azimuth = strike) and the dip vector (plunging at the
-    dip angle toward azimuth = strike + 90°). Both lie in the plane,
-    so their cross product is the true geometric normal.
+    Computes the normal as the cross product of the strike direction (horizontal,
+    azimuth = strike) and the dip vector (plunging with dip angle toward strike + 90°).
 
     Parameters
     ----------
@@ -456,7 +427,7 @@ def plane_sphe2enu(strike, dip):
     norms = np.linalg.norm(n, axis=-1, keepdims=True)
     n = n / np.where(norms < 1e-12, 1.0, norms)
 
-    # canonicalize U >= 0 (handle vertical planes where U ~ 0)
+    # canonicalize Up >= 0 (handle vertical planes where Up ~ 0)
     if n.ndim == 1:
         if abs(n[2]) < 1e-12 and n[0] < 0:
             n *= -1
@@ -474,7 +445,7 @@ def plane_sphe2enu(strike, dip):
 
 def plane_sphe2ned(strike, dip):
     """
-    Plane (strike/dip) to NED unit normal, canonicalized D >= 0.
+    Plane (strike/dip) to NED unit normal, canonicalized Down >= 0.
 
     Computes the normal as the cross product of the strike direction
     and the dip vector, both in NED coordinates.

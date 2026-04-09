@@ -17,8 +17,6 @@ Config reference
 ----------------
 job: fracture
 schema: adeli                       # built-in schema name (default: adeli)
-units:                              # optional category-level unit overrides
-  pressure: Pa
 
 model: path/to/model.vtu            # relative to this config file
 
@@ -62,29 +60,30 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 
 from fem2geo.internal.io import load_structural_csv
+from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import (
-    PlotConfig,
     MODEL_COLORS,
-    stereo_line,
+    get_style,
+    stereo_axes,
+    stereo_axes_contour,
     stereo_pole,
-    stereo_contour,
 )
-from fem2geo.runner import parse_config
-from fem2geo.utils.transform import line_enu2sphe
+from fem2geo.runner import resolve_output
 
 log = logging.getLogger("fem2geoLogger")
 
 
 # Plot defaults
 
-AVG_STYLE = PlotConfig(color=MODEL_COLORS[0], markersize=8, markeredgecolor="k")
-CELL_STYLE = PlotConfig(color="grey", markersize=3, alpha=0.3)
-CONTOUR_STYLE = PlotConfig(color="grey", levels=4, sigma=2.0, linewidth=1.0)
-DATA_STYLE = PlotConfig(markersize=6, alpha=0.8, marker="+")
+AVG_STYLE = {"color": MODEL_COLORS[0], "markersize": 8, "markeredgecolor": "k"}
+CELL_STYLE = {"color": "grey", "markersize": 3, "alpha": 0.3}
+CONTOUR_STYLE = {"color": "grey", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+DATA_STYLE = {"markersize": 6, "alpha": 0.8, "marker": "+"}
 
 
 # Main job
@@ -93,21 +92,23 @@ DATA_STYLE = PlotConfig(markersize=6, alpha=0.8, marker="+")
 def run(cfg: dict, job_dir: Path) -> None:
 
     # Load configs
-    schema, zone, data, plot, out = parse_config(cfg, job_dir)
-    out_dir = Path(out.get("dir", job_dir))
+    out = resolve_output(cfg, job_dir)
+    out_dir = out["dir"]
+    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
+    zone = cfg.get("zone", {})
+    plot = cfg.get("plot", {})
 
     avg_cfg = plot.get("avg_directions", {})
     show_avg = avg_cfg.get("show", True)
-    avg_style = AVG_STYLE.update(avg_cfg)
+    avg_style = get_style(AVG_STYLE, avg_cfg)
 
     cell_cfg = plot.get("cell_directions", {})
     show_cell = cell_cfg.get("show", False)
     cell_style = cell_cfg.get("style", "scatter")
-    cell_pc = (CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE).update(
-        cell_cfg
-    )
+    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
+    cell_pc = get_style(cell_base, cell_cfg)
 
-    data_style = DATA_STYLE.update(plot.get("data", {}))
+    data_style = get_style(DATA_STYLE, plot.get("data", {}))
 
     # load model and extract zone
     model_path = (job_dir / cfg["model"]).resolve()
@@ -130,7 +131,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="o",
             label=r"$\sigma_1$",
@@ -138,7 +139,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="s",
             label=r"$\sigma_2$",
@@ -146,7 +147,7 @@ def run(cfg: dict, job_dir: Path) -> None:
         Line2D(
             [0],
             [0],
-            color=avg_style.color,
+            color=avg_style["color"],
             linewidth=0,
             marker="v",
             label=r"$\sigma_3$",
@@ -155,33 +156,18 @@ def run(cfg: dict, job_dir: Path) -> None:
 
     # cell directions
     if show_cell:
-        p1, a1 = line_enu2sphe(sub.dir_s1)
-        p2, a2 = line_enu2sphe(sub.dir_s2)
-        p3, a3 = line_enu2sphe(sub.dir_s3)
+        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
         if cell_style == "contour":
-            kw = cell_pc.kwargs()
-            stereo_contour(ax, p1, a1, **kw)
-            stereo_contour(ax, p2, a2, **kw)
-            stereo_contour(ax, p3, a3, **kw)
+            stereo_axes_contour(ax, cell_vecs, cell_pc)
         else:
-            stereo_line(ax, p1, a1, **cell_pc.update(marker="o").kwargs())
-            stereo_line(ax, p2, a2, **cell_pc.update(marker="s").kwargs())
-            stereo_line(ax, p3, a3, **cell_pc.update(marker="v").kwargs())
+            stereo_axes(ax, cell_vecs, cell_pc)
 
     # average principal directions
     if show_avg:
         _, vec = sub.avg_principals("stress")
-        p1, a1 = line_enu2sphe(vec[:, 0])
-        p2, a2 = line_enu2sphe(vec[:, 1])
-        p3, a3 = line_enu2sphe(vec[:, 2])
-        stereo_line(
-            ax, p1, a1, label=r"$\sigma_1$", **avg_style.update(marker="o").kwargs()
-        )
-        stereo_line(
-            ax, p2, a2, label=r"$\sigma_2$", **avg_style.update(marker="s").kwargs()
-        )
-        stereo_line(
-            ax, p3, a3, label=r"$\sigma_3$", **avg_style.update(marker="v").kwargs()
+        stereo_axes(
+            ax, vec, avg_style,
+            labels=(r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$"),
         )
 
     # fracture datasets — colors start at MODEL_COLORS[1] to avoid clashing with avg
@@ -192,7 +178,7 @@ def run(cfg: dict, job_dir: Path) -> None:
             fd.planes[:, 0],
             fd.planes[:, 1],
             label=f"{name}",
-            **data_style.update(color=color).kwargs(),
+            **get_style(data_style, color=color),
         )
         legend_elements.append(
             Line2D([0], [0], color=color, linewidth=0, marker="+", label=name)
