@@ -20,10 +20,6 @@ def get_style(default, *overrides, drop=("show", "style"), **kw):
     """
     Merge style dicts into a matplotlib-ready kwargs dict.
 
-    Later overrides win over earlier ones. Keys listed in ``drop`` are
-    config-only flags (e.g. ``show``, ``style``) and are removed from
-    the result so they don't reach matplotlib.
-
     Parameters
     ----------
     default : dict
@@ -149,9 +145,8 @@ def stereo_slip_arrow(
     """
     Draw slip direction arrows on a stereonet for fault planes.
 
-    Accepts scalar or array inputs. Each arrow is anchored at the
-    slip line's stereonet position and points toward the pole for
-    reverse sense (rake > 0) or away for normal sense (rake < 0),
+    Each arrow is anchored at the slip line's stereonet position and points toward
+    the pole for reverse sense (rake > 0) or away for normal sense (rake < 0),
     following the Aki & Richards convention.
 
     Parameters
@@ -199,7 +194,7 @@ def stereo_slip_arrow(
 
 
 def stereo_contour(
-    ax, plunge, azimuth=None, label=None,
+    ax, plunge, azimuth=None,
     color="k", levels=4, sigma=2, linewidth=1.0, **kwargs,
 ):
     """

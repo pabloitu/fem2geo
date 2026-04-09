@@ -9,14 +9,13 @@ from fem2geo.utils.projections import (
 
 class Projector:
     """
-    Transform georeferenced coordinates into a local cartesian frame.
+    Transform georeferenced coordinates into a real-world or local cartesian frame.
 
     A Projector holds a source/destination CRS pair, unit and sign
     conventions for XY and Z, and an optional alignment anchor that
     pins a chosen geographic point to a chosen local coordinate, with
-    optional rotation around that anchor. Once built, the same
-    Projector can be applied to raw arrays, CatalogData objects, or
-    PyVista meshes.
+    optional rotation around that anchor. Projector can be used to transform raw
+    arrays, CatalogData objects, or meshes.
 
     Parameters
     ----------

@@ -1,5 +1,3 @@
-"""Structural geology and catalog data containers."""
-
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -77,7 +75,7 @@ class FaultData:
 @dataclass
 class CatalogData:
     """
-    Point catalog with arbitrary per-point numeric attributes.
+    Point catalog with per-point numeric attributes.
 
     Used for earthquake catalogs, sample locations, observation points,
     or any tabular dataset where each row has a position and a set of

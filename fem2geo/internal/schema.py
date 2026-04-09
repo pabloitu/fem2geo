@@ -50,8 +50,7 @@ class TensorEntry:
 @dataclass
 class ModelSchema:
     """
-    Translates between solver-specific array names and canonical
-    fem2geo names.
+    Translates between solver-specific array names and canonical fem2geo names.
 
     Parameters
     ----------
@@ -128,10 +127,6 @@ class ModelSchema:
         -------
         ModelSchema
 
-        Raises
-        ------
-        ValueError
-            If no schema with that name exists.
         """
         p = Path(__file__).parent / "schemas" / f"{name}.yaml"
         if not p.exists():

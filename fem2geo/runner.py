@@ -11,11 +11,11 @@ log = logging.getLogger("fem2geoLogger")
 
 _JOBS = {
     "principal_directions": "fem2geo.jobs.principal_directions",
-    "tendency":        "fem2geo.jobs.tendency",
-    "fracture":    "fem2geo.jobs.fracture",
+    "tendency":             "fem2geo.jobs.tendency",
+    "fracture":             "fem2geo.jobs.fracture",
     "resolved_shear":       "fem2geo.jobs.resolved_shear",
-    "kostrov":     "fem2geo.jobs.kostrov",
-    "project":     "fem2geo.jobs.project",
+    "kostrov":              "fem2geo.jobs.kostrov",
+    "project":              "fem2geo.jobs.project",
 }
 
 
@@ -96,15 +96,9 @@ def run(job_path: Path, output_dir: Path = None) -> None:
 def main() -> None:
     setup_logger()
 
-    # subcommand dispatch — if first arg is a known command, handle it
-    # separately so the original `fem2geo config.yaml` syntax still works
-    if len(sys.argv) > 1 and sys.argv[1] in ("download-tutorials",):
-        from fem2geo.internal.tutorials import register
-        parser = argparse.ArgumentParser(prog="fem2geo")
-        subparsers = parser.add_subparsers(dest="command", required=True)
-        register(subparsers)
-        args = parser.parse_args()
-        sys.exit(args.func(args) or 0)
+    if len(sys.argv) > 1 and sys.argv[1] == "download-tutorials":
+        from fem2geo.internal.tutorials import run_download
+        sys.exit(run_download() or 0)
 
     parser = argparse.ArgumentParser(
         prog="fem2geo",
