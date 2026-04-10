@@ -1,51 +1,38 @@
 """
 Job: kostrov
 ============
-Computes the Kostrov (1974) summed moment tensor from a fault population
-and compares its principal axes with a model's tensor principal directions.
-The Kostrov tensor represents the bulk kinematic strain implied by the
-observed fault slip.
-
-Structural data is read from CSV files via
-:func:`fem2geo.internal.io.load_structural_csv`. Only fault data
-(``strike, dip, rake`` with signed rake, Aki & Richards convention) is
-supported. Fracture-only data is skipped with a warning.
+Computes the Kostrov (1974) summed moment tensor from a fault population and
+compares its principal axes with the model's tensor principal directions. The
+Kostrov tensor represents the bulk kinematic strain implied by the observed
+fault slip.
 
 Config reference
 ----------------
 job: kostrov
 schema: adeli                       # built-in schema name (default: adeli)
+tensor: strain                      # strain | strain_rate | strain_plastic
+                                    # strain_elastic | stress_dev
 
 model: path/to/model.vtu            # relative to this config file
 
-zone:
-  type: sphere                      # sphere | box
+site:
   center: [x, y, z]
-  radius: r                         # sphere only
-  # dim: [dx, dy, dz]               # box only
-
-data:
-  faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
-
-tensor: strain                      #  strain | strain_rate | strain_plastic | strain_elastic
+  radius: r
+  data: path/to/faults.csv          # columns: strike, dip, rake (signed)
 
 plot:
   title: "Kostrov analysis"
   figsize: [8, 8]
   dpi: 200
-  kostrov:                          # Kostrov tensor principal axes
-    color: "#E63946"                # red
+  legend_size: 8
+  legend_loc: "best"
+  principals:                       # model tensor axes (always shown)
+    color: "#2196F3"
     markersize: 10
-  model:                            # model principal axes
-    color: "#2196F3"                # blue
+  kostrov:                          # Kostrov tensor axes (always shown)
+    color: "#E63946"
     markersize: 10
-  cell_directions:                  # per-cell model directions (default: show=false)
-    show: false
-    style: scatter                  # scatter | contour
-    color: "grey"
-    markersize: 3
-    alpha: 0.3
-  data_spread:                      # per-fault P/T axes (default: show=false)
+  fault_axes:                       # per-fault P/B/T (default: show=false)
     show: false
     style: scatter                  # scatter | contour
     color: "#E63946"
@@ -54,7 +41,8 @@ plot:
 
 output:
   dir: results/
-  vtu: extract.vtu                  # optional, saves extracted sub-model
+  figure: kostrov.png
+  vtu: extract.vtu
 
 Example
 -------
@@ -62,163 +50,166 @@ fem2geo config.yaml
 """
 
 import logging
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
+from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import get_style, stereo_axes, stereo_axes_contour
 from fem2geo.runner import resolve_output
 from fem2geo.utils import tensor
-from fem2geo.utils.tensor import kostrov_tensor, axes_misfit
+from fem2geo.utils.tensor import (
+    TENSOR_LABELS, TENSOR_SYMBOL, kostrov_tensor, axes_misfit,
+)
 
 log = logging.getLogger("fem2geoLogger")
 
-KOSTROV_STYLE = {"color": "#E63946", "markersize": 10, "markeredgecolor": "k"}
-MODEL_STYLE = {"color": "#2196F3", "markersize": 10, "markeredgecolor": "k"}
-CELL_STYLE = {"color": "grey", "markersize": 3, "alpha": 0.3}
-CONTOUR_STYLE = {"color": "grey", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
-DATA_STYLE = {"color": "#E63946", "markersize": 3, "alpha": 0.3}
-DATA_CONTOUR_STYLE = {"color": "#E63946", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
+AVG = {"color": "#2196F3", "markersize": 10, "markeredgecolor": "k"}
+KOSTROV = {"color": "#E63946", "markersize": 10, "markeredgecolor": "k"}
+FAULT = {"color": "#E63946", "markersize": 3, "alpha": 0.3}
+FAULT_CONTOUR = {"color": "#E63946", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
 
-_TENSOR_LABELS = {
-    "stress_dev": (r"$\sigma^{\mathrm{dev}}_1$", r"$\sigma^{\mathrm{dev}}_2$",
-                   r"$\sigma^{\mathrm{dev}}_3$"),
-    "strain": (r"$\epsilon_1$", r"$\epsilon_2$", r"$\epsilon_3$"),
-    "strain_rate": (r"$\dot{\epsilon}_1$", r"$\dot{\epsilon}_2$",
-                    r"$\dot{\epsilon}_3$"),
-    "strain_plastic": (r"$\epsilon^p_1$", r"$\epsilon^p_2$", r"$\epsilon^p_3$"),
-    "strain_elastic": (r"$\epsilon^e_1$", r"$\epsilon^e_2$", r"$\epsilon^e_3$"),
-}
-
-_TENSOR_SYMBOL = {
-    "stress_dev": r"$\sigma^{\mathrm{dev}}$",
-    "strain": r"$\epsilon$",
-    "strain_rate": r"$\dot{\epsilon}$",
-    "strain_plastic": r"$\epsilon^p$",
-    "strain_elastic": r"$\epsilon^e$",
-}
-
-_K_LABELS = [r"$K_1$ (shortening)", r"$K_2$ (intermediate)", r"$K_3$ (extension)"]
-_K_LOG = ["K1 (short.)", "K2 (int.)", "K3 (ext.)"]
+K_LABELS = (r"$K_1$ (shortening)", r"$K_2$ (intermediate)", r"$K_3$ (extension)")
+K_LOG = ("K1 (short.)", "K2 (int.)", "K3 (ext.)")
+MARKERS = ("o", "s", "v")
 
 
-def run(cfg: dict, job_dir: Path) -> None:
-    out = resolve_output(cfg, job_dir)
-    out_dir = out["dir"]
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
-    zone = cfg.get("zone", {})
+def parse_common(cfg, job_dir):
     plot = cfg.get("plot", {})
+    avg = plot.get("principals", {})
+    k_cfg = plot.get("kostrov", {})
+    fa = plot.get("fault_axes", {})
+    fa_style = fa.get("style", "scatter")
+    fa_base = FAULT_CONTOUR if fa_style == "contour" else FAULT
     which = cfg.get("tensor", "strain")
 
-    kostrov_cfg = plot.get("kostrov", {})
-    model_cfg = plot.get("model", {})
-    cell_cfg = plot.get("cell_directions", {})
-    data_cfg = plot.get("data_spread", {})
+    return {
+        "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
+        "model_path": (job_dir / cfg["model"]).resolve(),
+        "job_dir": job_dir,
+        "which": which,
+        "labels": TENSOR_LABELS[which],
+        "symbol": TENSOR_SYMBOL[which],
+        "title": plot.get("title", "Kostrov analysis"),
+        "figsize": plot.get("figsize", [8, 8]),
+        "dpi": plot.get("dpi", 200),
+        "legend_size": plot.get("legend_size", 8),
+        "legend_loc": plot.get("legend_loc", "best"),
+        "avg_style": get_style(AVG, avg),
+        "k_style": get_style(KOSTROV, k_cfg),
+        "fa_show": fa.get("show", False),
+        "fa_style": fa_style,
+        "fa_props": get_style(fa_base, fa),
+        "out": resolve_output(cfg, job_dir),
+    }
 
-    k_style = get_style(KOSTROV_STYLE, kostrov_cfg)
-    m_style = get_style(MODEL_STYLE, model_cfg)
-    show_cell = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")
-    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
-    cell_pc = get_style(cell_base, cell_cfg)
-    show_data = data_cfg.get("show", False)
-    data_style = data_cfg.get("style", "scatter")
-    data_base = DATA_CONTOUR_STYLE if data_style == "contour" else DATA_STYLE
-    data_pc = get_style(data_base, data_cfg)
 
-    # load model and extract zone
-    model_path = (job_dir / cfg["model"]).resolve()
-    log.info(f"Loading model: {model_path}")
-    model = Model.from_file(model_path, schema)
-    sub = model.extract(zone)
-    log.info(f"  {sub.n_cells} cells in zone")
+def parse_site(entry, job_dir):
+    site = dict(entry)
+    site["center"] = np.asarray(site["center"], dtype=float)
+    sd = load_structural_csv((job_dir / site["data"]).resolve())
+    if not isinstance(sd, FaultData):
+        raise ValueError(
+            f"Fault data requires strike, dip, rake columns: {site['data']}"
+        )
+    site["faults"] = sd
+    return site
 
-    # load fault datasets
-    all_strikes, all_dips, all_rakes = [], [], []
-    for name, entry in cfg["data"].items():
-        file_path = entry if isinstance(entry, str) else entry.get("file")
-        sd = load_structural_csv((job_dir / file_path).resolve())
 
-        log.info(f"  '{name}': {len(sd)} faults")
-        all_strikes.append(sd.planes[:, 0])
-        all_dips.append(sd.planes[:, 1])
-        all_rakes.append(sd.rakes)
+def parse(cfg, job_dir):
+    params = parse_common(cfg, job_dir)
+    params["site"] = parse_site(cfg["site"], job_dir)
+    return params
 
-    strikes = np.concatenate(all_strikes)
-    dips = np.concatenate(all_dips)
-    rakes = np.concatenate(all_rakes)
-    log.info(f"  Total: {len(strikes)} faults for Kostrov summation")
 
-    # Kostrov tensor principals
+def compute(ax, model, site, params):
+    legend = []
+    labels = params["labels"]
+    fd = site["faults"]
+    strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
+
+    # per-fault P/B/T axes
+    if params["fa_show"]:
+        dyads = np.array([
+            kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)
+        ])
+        per_vecs = tensor.eigenvectors(dyads)
+        if params["fa_style"] == "contour":
+            stereo_axes_contour(ax, per_vecs, params["fa_props"])
+        else:
+            stereo_axes(ax, per_vecs, params["fa_props"])
+
+    # kostrov tensor
     K = kostrov_tensor(strikes, dips, rakes)
     k_vecs = tensor.eigenvectors(K[None, :])[0]
+    stereo_axes(ax, k_vecs, params["k_style"], labels=K_LABELS)
 
-    # model tensor principals
-    axis_labels = _TENSOR_LABELS[which]
-    m_vals, m_vecs = sub.avg_principals(which)
+    # model tensor
+    m_vals, m_vecs = model.avg_principals(params["which"])
+    stereo_axes(ax, m_vecs, params["avg_style"], labels=labels)
 
-    # angular misfit between Kostrov and model axes
-    log.info(f"  Misfit between Kostrov and Model tensors ({which}): {m_vals}")
-
+    # misfit
     angles, pairs = axes_misfit(k_vecs, m_vecs)
     for idx, (i, j) in enumerate(pairs):
-        log.info(f"  {_K_LOG[i]} <-> {axis_labels[j]}: {angles[idx]:.1f} deg")
+        log.info(f"  {K_LOG[i]} <-> {labels[j]}: {angles[idx]:.1f} deg")
 
-    # figure
-    fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
+    # legend
+    sym = params["symbol"]
+    legend.extend([
+        Line2D([0], [0], color=params["k_style"]["color"], lw=0,
+               marker="o", markersize=8, label="Kostrov axes"),
+        Line2D([0], [0], color=params["avg_style"]["color"], lw=0,
+               marker="o", markersize=8, label=f"{sym} axes"),
+    ])
+    legend.extend([
+        Line2D([0], [0], color="k", lw=0, marker=MARKERS[i],
+               label=rf"$K_{i+1}$, {labels[i]}")
+        for i in range(3)
+    ])
+    if params["fa_show"]:
+        legend.append(
+            Line2D([0], [0], color=params["fa_props"].get("color", "#E63946"),
+                   lw=0, marker=".", alpha=0.3, label="Individual faults")
+        )
+
+    return legend
+
+
+def draw(model, site, params):
+    fig = plt.figure(figsize=params["figsize"])
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
 
-    # cell-level model directions
-    if show_cell:
-        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
-        if cell_style == "contour":
-            stereo_axes_contour(ax, cell_vecs, cell_pc)
-        else:
-            stereo_axes(ax, cell_vecs, cell_pc)
+    legend = compute(ax, model, site, params)
 
-    # per-fault P/B/T axes via individual Kostrov dyads
-    if show_data:
-        dyads = np.array(
-            [kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)])
-        per_vecs = tensor.eigenvectors(dyads)
-        if data_style == "contour":
-            stereo_axes_contour(ax, per_vecs, data_pc)
-        else:
-            stereo_axes(ax, per_vecs, data_pc)
+    ax.legend(handles=legend, prop={"size": params["legend_size"]},
+              loc=params["legend_loc"])
+    ax.set_title(params["title"], y=1.08)
 
-    # Kostrov principal axes
-    stereo_axes(ax, k_vecs, k_style, labels=_K_LABELS)
-
-    # model principal axes
-    stereo_axes(ax, m_vecs, m_style, labels=axis_labels)
-
-    # legend
-    sym = _TENSOR_SYMBOL[which]
-    legend_elements = [
-        Line2D([0], [0], color=k_style["color"], linewidth=0, marker="o", markersize=8,
-               label="Kostrov axes"),
-        Line2D([0], [0], color=m_style["color"], linewidth=0, marker="o", markersize=8,
-               label=f"{sym} axes"),
-        Line2D([], [], color="k", linewidth=0, marker="o", markersize=6,
-               label=rf"$K_1$, {axis_labels[0]}"),
-        Line2D([], [], color="k", linewidth=0, marker="s", markersize=6,
-               label=rf"$K_2$, {axis_labels[1]}"),
-        Line2D([], [], color="k", linewidth=0, marker="v", markersize=6,
-               label=rf"$K_3$, {axis_labels[2]}"),
-    ]
-    ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(plot.get("title", "Kostrov analysis"), y=1.08)
-
-    # save
-    if "vtu" in out:
-        sub.save(out_dir / out.get("vtu", "extract.vtu"))
-    fig.savefig(out_dir / out.get("figure", "kostrov.png"),
-                dpi=plot.get("dpi", 200), bbox_inches="tight")
+    out = params["out"]
+    fig.savefig(out["dir"] / out.get("figure", "kostrov.png"),
+                dpi=params["dpi"], bbox_inches="tight")
     plt.close(fig)
-    log.info(f"Saved results: {out_dir}")
+    return fig
+
+
+def run(cfg, job_dir):
+    params = parse(cfg, job_dir)
+    site = params["site"]
+
+    log.info(f"Loading {params['model_path']}")
+    model = Model.from_file(params["model_path"], params["schema"])
+    sub = model.extract(site["center"], site["radius"])
+    log.info(f"  {sub.n_cells} cells in site")
+
+    draw(sub, site, params)
+
+    out = params["out"]
+    if "vtu" in out:
+        sub.save(out["dir"] / out["vtu"])
+
+    log.info(f"Saved results in: {out['dir']}")
