@@ -1,28 +1,14 @@
 """
 Job: resolved_shear
-=================
-Visual Resolved Shear stress analysis: compares observed fault slip directions with
-the shear traction predicted by the model stress tensor, plotted together
-on a stereonet. Assumes the Wallace-Bott hypothesis of having the slip direction
-close to the resolved shear stress.
+===================
+Compares observed fault slip directions with the shear traction predicted by
+the model's average stress tensor. Assumes the Wallace-Bott hypothesis.
 
-For each fault plane (strike/dip/rake, Aki & Richards convention), the job:
-
-1. Plots the fault plane as a great circle or pole.
-2. Plots the observed slip direction as an arrow on the stereonet (colour A).
-3. Resolves the shear traction from the model's average stress tensor on
-   that fault plane, and plots the predicted slip direction as an arrow
-   (colour B).
-
-If the model stress correctly predicts the fault kinematics, the two
-arrows for each fault should overlap in direction and sense. Systematic
-divergence indicates a stress field inconsistent with the observed faulting.
-
-Rake convention (Aki & Richards):
-  rake > 0  : reverse/thrust component (hanging wall up)
-  rake < 0  : normal component (hanging wall down)
-  rake = 0  : pure left-lateral
-  rake = 180: pure right-lateral
+For each fault plane (strike/dip/rake, Aki & Richards convention), the job
+plots the fault plane as a great circle, the observed slip direction as an
+arrow, and the predicted slip direction (resolved from the model) as a second
+arrow. Overlap indicates consistency; divergence indicates a stress field
+inconsistent with the observed faulting.
 
 Config reference
 ----------------
@@ -31,41 +17,37 @@ schema: adeli                       # built-in schema name (default: adeli)
 
 model: path/to/model.vtu            # relative to this config file
 
-zone:
-  type: sphere                      # sphere | box
+site:
   center: [x, y, z]
-  radius: r                         # sphere only
-  # dim: [dx, dy, dz]               # box only
-
-data:
-  faults: path/to/faults.csv        # columns: strike, dip, rake (signed)
+  radius: r
+  data: path/to/faults.csv          # columns: strike, dip, rake (signed)
 
 plot:
   title: "Resolved shear analysis"
   figsize: [8, 8]
   dpi: 200
-  fault_planes:
-    show: true
-    style: planes                   # poles | planes
-    color: "grey"
-    alpha: 0.5
-    linewidth: 0.8
-  observed_slip:
-    color: "#E63946"                # red
-    arrowsize: 1.0
-    linewidth: 1.5
-  predicted_slip:
-    color: "#2196F3"                # blue
-    arrowsize: 1.0
-    linewidth: 1.5
-  avg_directions:
-    show: true
+  legend_size: 8
+  legend_loc: "best"
+  principals:                       # model average σ1/σ2/σ3 (always shown)
     color: "k"
     markersize: 8
+  planes:                           # fault great circles
+    color: "grey"
+    linewidth: 0.8
+    alpha: 0.5
+  observed:                         # observed slip arrows
+    color: "#E63946"
+    linewidth: 1.5
+    arrowsize: 1.0
+  predicted:                        # predicted slip arrows
+    color: "#2196F3"
+    linewidth: 1.5
+    arrowsize: 1.0
 
 output:
-  dir: results/                     # optional, defaults to config file directory
-  vtu: extract.vtu                  # optional, saves extracted sub-model
+  dir: results/
+  figure: resolved_shear.png
+  vtu: extract.vtu
 
 Example
 -------
@@ -73,9 +55,9 @@ fem2geo config.yaml
 """
 
 import logging
-from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch
 
@@ -83,218 +65,135 @@ from fem2geo.data import FaultData
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
-from fem2geo.plots import (
-    get_style,
-    stereo_axes,
-    stereo_pole,
-    stereo_plane,
-    stereo_slip_arrow,
-)
+from fem2geo.plots import get_style, stereo_axes, stereo_plane, stereo_slip_arrow
 from fem2geo.runner import resolve_output
 from fem2geo.utils.tensor import resolved_rake
 
 log = logging.getLogger("fem2geoLogger")
 
-AVG_STYLE = {"color": "k", "markersize": 8, "markeredgecolor": "k"}
-OBS_STYLE = {"color": "#E63946", "arrowsize": 1.0, "linewidth": 1.5}
-PRED_STYLE = {"color": "#2196F3", "arrowsize": 1.0, "linewidth": 1.5}
-PLANE_STYLE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
+AVG = {"color": "k", "markersize": 8, "markeredgecolor": "k"}
+OBS = {"color": "#E63946", "arrowsize": 1.0, "linewidth": 1.5}
+PRED = {"color": "#2196F3", "arrowsize": 1.0, "linewidth": 1.5}
+PLANE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
+
+LABELS = (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$")
+MARKERS = ("o", "s", "v")
 
 
-def run(cfg: dict, job_dir: Path) -> None:
-    out = resolve_output(cfg, job_dir)
-    out_dir = out["dir"]
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
-    zone = cfg.get("zone", {})
+def parse_common(cfg, job_dir):
     plot = cfg.get("plot", {})
+    avg = plot.get("principals", {})
+    planes = plot.get("planes", {})
+    obs = plot.get("observed", {})
+    pred = plot.get("predicted", {})
 
-    # plot style options
-    plane_cfg = plot.get("fault_planes", {})
-    obs_cfg = plot.get("observed_slip", {})
-    pred_cfg = plot.get("predicted_slip", {})
-    avg_cfg = plot.get("avg_directions", {})
+    return {
+        "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
+        "model_path": (job_dir / cfg["model"]).resolve(),
+        "job_dir": job_dir,
+        "title": plot.get("title", "Resolved shear analysis"),
+        "figsize": plot.get("figsize", [8, 8]),
+        "dpi": plot.get("dpi", 200),
+        "legend_size": plot.get("legend_size", 8),
+        "legend_loc": plot.get("legend_loc", "best"),
+        "avg_style": get_style(AVG, avg),
+        "plane_style": get_style(PLANE, planes),
+        "obs_style": get_style(OBS, obs),
+        "pred_style": get_style(PRED, pred),
+        "out": resolve_output(cfg, job_dir),
+    }
 
-    show_planes = plane_cfg.get("show", True)
-    plane_style = plane_cfg.get("style", "planes")
-    show_avg = avg_cfg.get("show", True)
-    avg_style = get_style(AVG_STYLE, avg_cfg)
 
-    obs_color = obs_cfg.get("color", OBS_STYLE["color"])
-    obs_arrowsize = obs_cfg.get("arrowsize", OBS_STYLE["arrowsize"])
-    obs_lw = obs_cfg.get("linewidth", OBS_STYLE["linewidth"])
-    pred_color = pred_cfg.get("color", PRED_STYLE["color"])
-    pred_arrowsize = pred_cfg.get("arrowsize", PRED_STYLE["arrowsize"])
-    pred_lw = pred_cfg.get("linewidth", PRED_STYLE["linewidth"])
-    plane_color = plane_cfg.get("color", PLANE_STYLE["color"])
-    plane_alpha = plane_cfg.get("alpha", PLANE_STYLE["alpha"])
-    plane_lw = plane_cfg.get("linewidth", PLANE_STYLE["linewidth"])
-
-    # load model and extract zone
-    model_path = (job_dir / cfg["model"]).resolve()
-    log.info(f"Loading model: {model_path}")
-    model = Model.from_file(model_path, schema)
-    sub = model.extract(zone)
-    log.info(f"  {sub.n_cells} cells in zone")
-
-    if "vtu" in out:
-        sub.save(out_dir / out["vtu"])
-
-    avg_stress = sub.avg_tensor("stress")
-
-    # load fault datasets
-    fault_datasets = {}
-    for name, entry in cfg["data"].items():
-        file_path = entry if isinstance(entry, str) else entry.get("file")
-        sd = load_structural_csv((job_dir / file_path).resolve())
-        if not isinstance(sd, FaultData):
-            log.warning(f"  '{name}' has no rake column — skipping.")
-            continue
-        fault_datasets[name] = sd
-
-    if not fault_datasets:
+def parse_site(entry, job_dir):
+    site = dict(entry)
+    site["center"] = np.asarray(site["center"], dtype=float)
+    sd = load_structural_csv((job_dir / site["data"]).resolve())
+    if not isinstance(sd, FaultData):
         raise ValueError(
-            "No fault datasets found. CSV files must have strike, dip, " "rake columns."
+            f"Fault data requires strike, dip, rake columns: {site['data']}"
         )
+    site["faults"] = sd
+    return site
 
-    # figure
-    fig = plt.figure(figsize=plot.get("figsize", [8, 8]))
+
+def parse(cfg, job_dir):
+    params = parse_common(cfg, job_dir)
+    params["site"] = parse_site(cfg["site"], job_dir)
+    return params
+
+
+def compute(ax, model, site, params):
+    legend = []
+    fd = site["faults"]
+    strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
+    ps = params["plane_style"]
+    os = params["obs_style"]
+    prs = params["pred_style"]
+
+    # fault planes
+    stereo_plane(ax, strikes, dips, **ps)
+
+    # observed slip arrows
+    stereo_slip_arrow(ax, strikes, dips, rakes, **os)
+
+    # predicted slip arrows
+    avg_stress = model.avg_tensor("stress")
+    pred = resolved_rake(avg_stress, strikes, dips)
+    stereo_slip_arrow(ax, strikes, dips, pred, **prs)
+
+    # principal directions
+    _, vec = model.avg_principals("stress")
+    stereo_axes(ax, vec, params["avg_style"], labels=LABELS)
+
+    legend.extend([
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=os["color"], lw=os["linewidth"],
+                        label="Observed slip"),
+        FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
+                        color=prs["color"], lw=prs["linewidth"],
+                        label="Predicted slip"),
+        Line2D([0], [0], color=ps["color"], linewidth=ps["linewidth"],
+               alpha=ps.get("alpha", 0.5), label="Fault planes"),
+    ])
+    legend.extend([
+        Line2D([0], [0], color="k", lw=0, marker=MARKERS[i], label=LABELS[i])
+        for i in range(3)
+    ])
+
+    return legend
+
+
+def draw(model, site, params):
+    fig = plt.figure(figsize=params["figsize"])
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
 
-    # plot fault data
-    for name, fd in fault_datasets.items():
-        strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
+    legend = compute(ax, model, site, params)
 
-        # fault planes or poles
-        if show_planes:
-            if plane_style == "planes":
-                stereo_plane(
-                    ax,
-                    strikes,
-                    dips,
-                    color=plane_color,
-                    alpha=plane_alpha,
-                    linewidth=plane_lw,
-                )
-            else:
-                stereo_pole(
-                    ax,
-                    strikes,
-                    dips,
-                    color=plane_color,
-                    marker="+",
-                    markersize=6,
-                    alpha=plane_alpha,
-                )
+    ax.legend(handles=legend, prop={"size": params["legend_size"]},
+              loc=params["legend_loc"])
+    ax.set_title(params["title"], y=1.08)
 
-        # observed slip arrows
-        stereo_slip_arrow(
-            ax,
-            strikes,
-            dips,
-            rakes,
-            color=obs_color,
-            arrowsize=obs_arrowsize,
-            linewidth=obs_lw,
-        )
-
-        # predicted slip arrows (resolved shear traction)
-        pred = resolved_rake(avg_stress, strikes, dips)
-        stereo_slip_arrow(
-            ax,
-            strikes,
-            dips,
-            pred,
-            color=pred_color,
-            arrowsize=pred_arrowsize,
-            linewidth=pred_lw,
-        )
-
-    # average principal directions
-    if show_avg:
-        _, vec = sub.avg_principals("stress")
-        stereo_axes(ax, vec, avg_style)
-
-    # legend
-    legend_elements = [
-        FancyArrowPatch(
-            (0, 0),
-            (0.02, 0),
-            arrowstyle="->",
-            color=obs_color,
-            lw=obs_lw,
-            label="Observed slip",
-        ),
-        FancyArrowPatch(
-            (0, 0),
-            (0.02, 0),
-            arrowstyle="->",
-            color=pred_color,
-            lw=pred_lw,
-            label="Predicted slip",
-        ),
-    ]
-    if show_planes:
-        if plane_style == "planes":
-            legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    color=plane_color,
-                    linewidth=plane_lw,
-                    alpha=plane_alpha,
-                    label="Fault planes",
-                )
-            )
-        else:
-            legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    color=plane_color,
-                    linewidth=0,
-                    marker="+",
-                    markersize=6,
-                    alpha=plane_alpha,
-                    label="Fault poles",
-                )
-            )
-    if show_avg:
-        legend_elements.extend(
-            [
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style["color"],
-                    linewidth=0,
-                    marker="o",
-                    label=r"$\sigma_1$",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style["color"],
-                    linewidth=0,
-                    marker="s",
-                    label=r"$\sigma_2$",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=avg_style["color"],
-                    linewidth=0,
-                    marker="v",
-                    label=r"$\sigma_3$",
-                ),
-            ]
-        )
-
-    ax.legend(handles=legend_elements, fontsize=7)
-    ax.set_title(plot.get("title", "Resolved shear analysis"), y=1.08)
-    fig.savefig(
-        out_dir / out.get("figure", "resolved_shear.png"),
-        dpi=plot.get("dpi", 200),
-        bbox_inches="tight",
-    )
+    out = params["out"]
+    fig.savefig(out["dir"] / out.get("figure", "resolved_shear.png"),
+                dpi=params["dpi"], bbox_inches="tight")
     plt.close(fig)
-    log.info(f"Saved results: {out_dir}")
+    return fig
+
+
+def run(cfg, job_dir):
+    params = parse(cfg, job_dir)
+    site = params["site"]
+
+    log.info(f"Loading {params['model_path']}")
+    model = Model.from_file(params["model_path"], params["schema"])
+    sub = model.extract(site["center"], site["radius"])
+    log.info(f"  {sub.n_cells} cells in site")
+
+    draw(sub, site, params)
+
+    out = params["out"]
+    if "vtu" in out:
+        sub.save(out["dir"] / out["vtu"])
+
+    log.info(f"Saved results in: {out['dir']}")

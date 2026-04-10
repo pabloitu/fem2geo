@@ -1,0 +1,13 @@
+job: resolved_shear
+schema: adeli3
+
+model: ../data/reverse_fault.vtu
+
+site:
+  center: [8000, 6000, -2000]
+  radius: 400
+  data: ../data/faults.csv
+
+output:
+  dir: ./
+  figure: resolved_shear.png
