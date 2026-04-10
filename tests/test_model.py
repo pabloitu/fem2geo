@@ -162,8 +162,6 @@ class TestEigen(unittest.TestCase):
         np.testing.assert_allclose(self.m.val_s3, vals[:, 2], atol=1e-12)
 
     def test_eigenvalues_strain(self):
-        # strain is assembled via TensorField — needs schema with strain tensor
-        # just verify the call dispatches without error on stress_dev
         vals = self.m.eigenvalues("stress_dev")
         self.assertEqual(vals.shape, (_N, 3))
 
@@ -191,7 +189,6 @@ class TestAverages(unittest.TestCase):
         np.testing.assert_allclose(avg, avg.T, atol=1e-12)
 
     def test_stress_dev_removes_isotropic(self):
-        # build a stress with nonzero trace
         data = {
             "_tensor_stress_xx": np.array([-3, -3, -3, -3.0]),
             "_tensor_stress_yy": np.array([-2, -2, -2, -2.0]),
@@ -202,10 +199,8 @@ class TestAverages(unittest.TestCase):
         m = Model(_grid(data), _SCHEMA_COMP)
         s = m.stress
         sd = m.stress_dev
-        # trace of deviatoric should be zero per cell
         traces = np.trace(sd, axis1=1, axis2=2)
         np.testing.assert_allclose(traces, 0, atol=1e-12)
-        # eigenvectors should be the same
         _, v_full = np.linalg.eigh(s[0])
         _, v_dev = np.linalg.eigh(sd[0])
         for i in range(3):
@@ -218,34 +213,16 @@ class TestExtraction(unittest.TestCase):
     def setUp(self):
         self.m = _model_comp()
 
-    def test_sphere_and_box_return_model(self):
+    def test_extract_returns_model(self):
         self.assertIsInstance(
-            self.m.extract_sphere([.5, .5, -1.5], 10), Model)
-        self.assertIsInstance(
-            self.m.extract_box([.5, .5, -1.5], [5, 5, 5]), Model)
-
-    def test_extract_sphere_from_dict(self):
-        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
-        self.assertIsInstance(self.m.extract(zone), Model)
-
-    def test_extract_box_from_dict(self):
-        zone = {"type": "box", "center": [.5, .5, -1.5], "dim": [5, 5, 5]}
-        self.assertIsInstance(self.m.extract(zone), Model)
-
-    def test_extract_bad_type_raises(self):
-        with self.assertRaises(ValueError):
-            self.m.extract({"type": "cylinder", "center": [0, 0, 0]})
+            self.m.extract([.5, .5, -1.5], 10), Model)
 
     def test_preserves_schema(self):
-        sub = self.m.extract_sphere([.5, .5, -1.5], 10)
+        sub = self.m.extract([.5, .5, -1.5], 10)
         self.assertIs(sub.schema, self.m.schema)
 
-    def test_preserves_schema_via_dict(self):
-        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
-        self.assertIs(self.m.extract(zone).schema, self.m.schema)
-
     def test_large_radius_selects_all(self):
-        self.m.extract_sphere([.5, .5, -1.5], 100)
+        self.m.extract([.5, .5, -1.5], 100)
         ids = self.m.grid.extract_cells.call_args[0][0]
         np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
 

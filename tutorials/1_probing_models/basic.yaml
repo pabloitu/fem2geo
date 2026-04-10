@@ -1,0 +1,11 @@
+job: principal_directions
+schema: adeli
+
+model: ../data/small_box.vtk
+
+site: {center: [22, 22, -7], radius: 0.8}
+
+output:
+  dir: ./
+  figure: principal_directions.png
+  vtu: extract.vtu
