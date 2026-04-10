@@ -1,0 +1,27 @@
+job: sites.resolved_shear
+schema: adeli3
+
+model: ../data/reverse_fault.vtu
+
+sites:
+  station_a:
+    center: [8000, 6000, -1500]
+    radius: 300
+    data: ../data/faults.csv
+  station_b:
+    center: [8000, 6000, -2500]
+    radius: 300
+    data: ../data/faults.csv
+
+plot:
+  title: "Resolved shear across stations"
+  figsize: [14, 7]
+  dpi: 300
+  legend_size: 8
+  principals:
+    color: "k"
+    markersize: 10
+
+output:
+  dir: multi_site/
+  figure: resolved_shear_multi.png

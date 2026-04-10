@@ -2,7 +2,8 @@
 Job: fracture
 =============
 Compares fracture orientation measurements with the principal directions
-predicted by a model at a given site.
+predicted by a FEM model at a given site. Plots fracture poles and model
+principal directions together on a stereonet.
 
 Config reference
 ----------------
@@ -33,7 +34,7 @@ plot:
     color: "grey"
     markersize: 3
     alpha: 0.3
-  poles:                            # data poles
+  poles:                            # data pole overlay
     color: "blue"
     marker: "+"
     markersize: 6
@@ -116,7 +117,7 @@ def parse(cfg, job_dir):
     return params
 
 
-def compute(ax, model, site, params):
+def compute(ax, model, site, params, cbar=True):
     legend = []
     labels = params["labels"]
     ps = params["pole_style"]
@@ -147,7 +148,7 @@ def compute(ax, model, site, params):
     stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1], **ps)
     legend.append(
         Line2D([0], [0], color=ps.get("color", POLES["color"]), lw=0,
-               marker=ps.get("marker", "+"), label="Fracture Poles")
+               marker=ps.get("marker", "+"), label="poles")
     )
 
     return legend

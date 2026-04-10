@@ -122,7 +122,7 @@ def parse(cfg, job_dir):
     return params
 
 
-def compute(ax, model, site, params):
+def compute(ax, model, site, params, cbar=True):
     legend = []
     fd = site["faults"]
     strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
@@ -130,18 +130,13 @@ def compute(ax, model, site, params):
     os = params["obs_style"]
     prs = params["pred_style"]
 
-    # fault planes
     stereo_plane(ax, strikes, dips, **ps)
-
-    # observed slip arrows
     stereo_slip_arrow(ax, strikes, dips, rakes, **os)
 
-    # predicted slip arrows
     avg_stress = model.avg_tensor("stress")
     pred = resolved_rake(avg_stress, strikes, dips)
     stereo_slip_arrow(ax, strikes, dips, pred, **prs)
 
-    # principal directions
     _, vec = model.avg_principals("stress")
     stereo_axes(ax, vec, params["avg_style"], labels=LABELS)
 

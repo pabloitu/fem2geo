@@ -126,13 +126,12 @@ def parse(cfg, job_dir):
     return params
 
 
-def compute(ax, model, site, params):
+def compute(ax, model, site, params, cbar=True):
     legend = []
     labels = params["labels"]
     fd = site["faults"]
     strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
 
-    # per-fault P/B/T axes
     if params["fa_show"]:
         dyads = np.array([
             kostrov_tensor(s, d, r) for s, d, r in zip(strikes, dips, rakes)
@@ -143,21 +142,17 @@ def compute(ax, model, site, params):
         else:
             stereo_axes(ax, per_vecs, params["fa_props"])
 
-    # kostrov tensor
     K = kostrov_tensor(strikes, dips, rakes)
     k_vecs = tensor.eigenvectors(K[None, :])[0]
     stereo_axes(ax, k_vecs, params["k_style"], labels=K_LABELS)
 
-    # model tensor
     m_vals, m_vecs = model.avg_principals(params["which"])
     stereo_axes(ax, m_vecs, params["avg_style"], labels=labels)
 
-    # misfit
     angles, pairs = axes_misfit(k_vecs, m_vecs)
     for idx, (i, j) in enumerate(pairs):
         log.info(f"  {K_LOG[i]} <-> {labels[j]}: {angles[idx]:.1f} deg")
 
-    # legend
     sym = params["symbol"]
     legend.extend([
         Line2D([0], [0], color=params["k_style"]["color"], lw=0,

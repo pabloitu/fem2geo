@@ -1,0 +1,27 @@
+job: sites.principal_directions
+schema: adeli3
+tensor: strain_plastic
+
+model: ../data/normal_fault.vtu
+
+sites:
+  shallow: {center: [8000, 5000, -1000], radius: 400}
+  mid:     {center: [8000, 5000, -2000], radius: 200}
+  deep:    {center: [8000, 5000, -3000], radius: 200}
+  base:    {center: [8000, 5000, -4000], radius: 400}
+
+plot:
+  title: "Principal directions along depth"
+  figsize: [12, 12]
+  dpi: 200
+  principals:
+    color: "red"
+    markersize: 10
+  cell_principals:
+    show: true
+    style: scatter
+
+output:
+  dir: multi_site/
+  figure: principal_directions_profile.png
+  per_site: false

@@ -40,8 +40,8 @@ plot:
     marker: "+"
     markersize: 5
     alpha: 0.7
-  colorbar:                         # tendency field colormap
-    cmap: "viridis"                 # any matplotlib cmap name
+  colorbar:
+    cmap: "viridis"
     levels: 10                      # int (n bins) or list of bin edges
     shrink: 0.6
     pad: 0.08
@@ -161,7 +161,6 @@ def compute(ax, model, site, params, cbar=True):
     ps = params["pole_style"]
     cb = params["cbar_opts"]
 
-    # tendency field
     avg_stress = model.avg_tensor("stress")
     ms, md = grid_nodes(params["n_strikes"], params["n_dips"])
     cs, cd = grid_centers(ms, md)
@@ -180,7 +179,6 @@ def compute(ax, model, site, params, cbar=True):
                      "orientation": cb["orientation"]},
     )
 
-    # principal directions
     _, vec = model.avg_principals("stress")
     stereo_axes(ax, vec, params["avg_style"], labels=LABELS)
 
@@ -190,7 +188,6 @@ def compute(ax, model, site, params, cbar=True):
         for i in range(3)
     ])
 
-    # pole overlay (fractures or faults — only strike/dip used)
     if site["poles"] is not None:
         fd = site["poles"]
         stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1], **ps)

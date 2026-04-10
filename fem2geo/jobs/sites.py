@@ -1,9 +1,16 @@
 """
 Job: sites
 ==========
-Dispatcher for running any atomic job over multiple sites. Reuses the atomic
-job's ``parse_common``, ``parse_site``, and ``compute`` functions, and assembles
-the per-site panels into a single grid figure.
+Dispatcher for running any atomic job over multiple sites. Reuses the inner
+job's ``parse_common``, ``parse_site``, and ``compute`` functions, and
+assembles the per-site panels into a single figure.
+
+The figure has one shared legend (top right) and, for tendency, one shared
+colorbar. Per-panel decorations (per-axes legend and per-panel colorbar) are
+suppressed. Azimuth ticks on each stereonet are stripped to save space.
+
+Optionally, each site can also be saved as its own standalone figure by
+setting ``output.per_site: true``.
 
 Config reference
 ----------------
@@ -15,8 +22,7 @@ sites:
   name_a:
     center: [x, y, z]
     radius: r
-    # data: path/to/data.csv        # if the inner job uses data
-    # title: "Custom panel title"   # optional, defaults to the site key
+    title: "Custom panel title"     # optional, defaults to site key
   name_b:
     center: [x, y, z]
     radius: r
@@ -25,13 +31,13 @@ plot:
   title: "Figure-level suptitle"
   figsize: [12, 8]
   dpi: 200
+  legend_size: 7
   grid: [rows, cols]                # optional, auto closest-to-square
-  # all other plot keys are forwarded to the inner job and applied uniformly
-  # to every panel (e.g. avg_directions, cell_directions)
 
 output:
   dir: results/
   figure: sites.png
+  per_site: false                   # also write each site as its own file
 
 Example
 -------
@@ -42,6 +48,7 @@ import logging
 import math
 
 import matplotlib.pyplot as plt
+from matplotlib.collections import QuadMesh
 
 from fem2geo.jobs import (
     principal_directions, fracture, resolved_shear, kostrov, tendency,
@@ -74,10 +81,12 @@ def parse(cfg, job_dir):
     plot = cfg.get("plot", {})
     return {
         **common,
+        "legend_size": plot.get("legend_size", 14),
         "inner": inner,
         "inner_name": name,
         "sites": sites,
         "grid": plot.get("grid"),
+        "per_site": cfg.get("output", {}).get("per_site", False),
     }
 
 
@@ -92,32 +101,91 @@ def grid_shape(n, override=None):
 def draw(model, params):
     sites = params["sites"]
     rows, cols = grid_shape(len(sites), params["grid"])
-
-    fig = plt.figure(figsize=params["figsize"])
     inner = params["inner"]
-    legend = getattr(inner, "LEGEND", None)
+
+    fig = plt.figure(figsize=params["figsize"], layout="constrained")
+    fig.get_layout_engine().set(w_pad=0.02, h_pad=0.02, hspace=0.0, wspace=0.0)
+
+    sup = None
+    if params["title"]:
+        sup = fig.suptitle(params["title"], fontsize=12)
+
+    legend_handles = None
+    mappable = None
 
     for i, (name, site) in enumerate(sites.items()):
         ax = fig.add_subplot(rows, cols, i + 1, projection="stereonet")
         ax.grid(True)
+        ax.set_azimuth_ticks([])
 
         sub = model.extract(site["center"], site["radius"])
         log.info(f"  [{name}] {sub.n_cells} cells")
 
-        inner.compute(ax, sub, site, params)
+        handles = inner.compute(ax, sub, site, params, cbar=False)
 
-        if legend is not None:
-            ax.legend(handles=legend, fontsize=6)
-        ax.set_title(site.get("title", name), y=1.08)
+        if legend_handles is None:
+            legend_handles = handles
 
-    if params["title"]:
-        fig.suptitle(params["title"])
+        for c in ax.collections:
+            if isinstance(c, QuadMesh):
+                mappable = c
+
+        ax.set_title(site.get("title", name), fontsize=9, y=1.02)
+
+    # shared legend (top right)
+    leg = None
+    if legend_handles:
+        leg = fig.legend(
+            handles=legend_handles,
+            prop={"size": params["legend_size"]},
+            loc="upper right",
+            bbox_to_anchor=(1.0, 1.0),
+            frameon=True,
+        )
+
+    # shared colorbar (tendency only)
+    if mappable is not None:
+        cb = params.get("cbar_opts", {})
+        panel_axes = [a for a in fig.axes if a.get_subplotspec() is not None]
+        fig.colorbar(
+            mappable,
+            ax=panel_axes,
+            label=tendency.CBAR_LABELS.get(params.get("variant", ""), ""),
+            shrink=cb.get("shrink", 0.6),
+            pad=cb.get("pad", 0.04),
+            orientation=cb.get("orientation", "vertical"),
+            ticks=cb["levels"] if isinstance(cb.get("levels"), (list, tuple)) else None,
+        )
 
     out = params["out"]
     figname = out.get("figure", f"sites_{params['inner_name']}.png")
-    fig.savefig(out["dir"] / figname, dpi=params["dpi"], bbox_inches="tight")
+    extras = [a for a in (leg, sup) if a is not None]
+    fig.savefig(out["dir"] / figname, dpi=params["dpi"],
+                bbox_inches="tight", bbox_extra_artists=extras)
     plt.close(fig)
+
+    if params["per_site"]:
+        save_per_site(model, params)
+
     return fig
+
+
+def save_per_site(model, params):
+    """Render each site as its own standalone figure via the inner job's draw."""
+    inner = params["inner"]
+    sites = params["sites"]
+    out = params["out"]
+    original_figname = out.get("figure")
+
+    for name, site in sites.items():
+        sub = model.extract(site["center"], site["radius"])
+        out["figure"] = f"{name}.png"
+        inner.draw(sub, site, params)
+
+    if original_figname is None:
+        out.pop("figure", None)
+    else:
+        out["figure"] = original_figname
 
 
 def run(cfg, job_dir):

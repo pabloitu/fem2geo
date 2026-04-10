@@ -1,0 +1,36 @@
+job: sites.kostrov
+schema: adeli3
+tensor: stress
+
+model: ../data/reverse_fault.vtu
+
+sites:
+  site_a:
+    center: [8000, 6000, -1500]
+    radius: 300
+    data: ../data/faults.csv
+  site_b:
+    center: [8000, 6000, -2500]
+    radius: 300
+    data: ../data/faults.csv
+
+plot:
+  title: "Kostrov comparison across sites"
+  figsize: [7, 15]
+  dpi: 300
+  legend_size: 8
+  principals:
+    color: "#2196F3"
+    markersize: 12
+  kostrov:
+    color: "#E63946"
+    markersize: 12
+  fault_axes:
+    show: true
+    style: scatter
+    markersize: 3
+    alpha: 0.3
+
+output:
+  dir: multi_site/
+  figure: kostrov_multi.png

@@ -1,9 +1,8 @@
 """
 Job: principal_directions
 =========================
-Probes a model at a given site by plotting principal stress directions on a
-stereonet. Shows the model's average principal directions, with optional
-per-cell spread visualisation.
+Probes a model at a given site by plotting principal directions on a stereonet.
+Shows the model's average principal directions, with optional per-cell spread.
 
 Config reference
 ----------------
@@ -103,7 +102,7 @@ def parse(cfg, job_dir):
     return params
 
 
-def compute(ax, model, site, params):
+def compute(ax, model, site, params, cbar=True):
     legend = []
     labels = params["labels"]
 
@@ -163,7 +162,6 @@ def run(cfg, job_dir):
 
     out = params["out"]
     if "vtu" in out:
-        print(out["dir"] / out["vtu"])
         sub.save(out["dir"] / out["vtu"])
 
     log.info(f"Saved results in: {out['dir']}")

@@ -18,6 +18,9 @@ _JOBS = {
     "project": "fem2geo.jobs.project",
     "sites.principal_directions": "fem2geo.jobs.sites",
     "sites.fracture": "fem2geo.jobs.sites",
+    "sites.resolved_shear": "fem2geo.jobs.sites",
+    "sites.kostrov": "fem2geo.jobs.sites",
+    "sites.tendency": "fem2geo.jobs.sites",
 }
 
 
