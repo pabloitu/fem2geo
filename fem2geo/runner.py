@@ -10,13 +10,14 @@ from fem2geo.internal.logger import setup_logger
 log = logging.getLogger("fem2geoLogger")
 
 _JOBS = {
-    "principal_directions":         "fem2geo.jobs.principal_directions",
-    "tendency":                     "fem2geo.jobs.tendency",
-    "fracture":                     "fem2geo.jobs.fracture",
-    "resolved_shear":               "fem2geo.jobs.resolved_shear",
-    "kostrov":                      "fem2geo.jobs.kostrov",
-    "project":                      "fem2geo.jobs.project",
-    "sites.principal_directions":   "fem2geo.jobs.sites"
+    "principal_directions": "fem2geo.jobs.principal_directions",
+    "tendency": "fem2geo.jobs.tendency",
+    "fracture": "fem2geo.jobs.fracture",
+    "resolved_shear": "fem2geo.jobs.resolved_shear",
+    "kostrov": "fem2geo.jobs.kostrov",
+    "project": "fem2geo.jobs.project",
+    "sites.principal_directions": "fem2geo.jobs.sites",
+    "sites.fracture": "fem2geo.jobs.sites",
 }
 
 

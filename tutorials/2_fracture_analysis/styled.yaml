@@ -1,0 +1,26 @@
+job: fracture
+schema: adeli
+
+model: ../data/model_a.vtu
+
+site:
+  center: [25, 30, -10]
+  radius: 1
+  data: ../data/fractures.csv
+
+plot:
+  title: "Fractures vs model principal directions"
+  figsize: [9, 9]
+  dpi: 300
+  avg_directions:
+    show: true
+    markersize: 10
+  cell_directions:
+    show: true
+    style: scatter
+    color: grey
+    markersize: 1
+    alpha: 0.3
+
+output:
+  dir: styled/

@@ -1,0 +1,13 @@
+job: fracture
+schema: adeli
+
+model: ../data/model_a.vtu
+
+site:
+  center: [25, 30, -10]
+  radius: 1
+  data: ../data/fractures.csv
+
+output:
+  dir: ./
+  figure: fracture.png
