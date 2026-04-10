@@ -1,26 +1,33 @@
 job: fracture
-schema: adeli
+schema: adeli3
 
-model: ../data/model_a.vtu
+model: ../data/normal_fault.vtu
 
 site:
-  center: [25, 30, -10]
-  radius: 1
+  center: [8000, 5000, -3000]
+  radius: 200
   data: ../data/fractures.csv
 
 plot:
-  title: "Fractures vs model principal directions"
-  figsize: [9, 9]
+  title: "Fractures vs Principal Directions"
+  figsize: [6, 6]
   dpi: 300
-  avg_directions:
-    show: true
+  legend_size: 10
+  legend_loc: 3
+  principals:
+    color: "red"
     markersize: 10
-  cell_directions:
+  cell_principals:
     show: true
     style: scatter
     color: grey
     markersize: 1
     alpha: 0.3
+  fractures:
+    color: "blue"
+    marker: "x"
+    markersize: 10
+    alpha: 0.6
 
 output:
   dir: styled/

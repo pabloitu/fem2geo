@@ -1,11 +1,11 @@
 job: fracture
-schema: adeli
+schema: adeli3
 
-model: ../data/model_a.vtu
+model: ../data/normal_fault.vtu
 
 site:
-  center: [25, 30, -10]
-  radius: 1
+  center: [8000, 5000, -3000]
+  radius: 200
   data: ../data/fractures.csv
 
 output:
