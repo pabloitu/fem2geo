@@ -2,8 +2,7 @@
 Job: fracture
 =============
 Compares fracture orientation measurements with the principal directions
-predicted by a FEM model at a given site. Plots fracture poles and model
-principal directions together on a stereonet.
+predicted by a model at a given site.
 
 Config reference
 ----------------
@@ -34,7 +33,7 @@ plot:
     color: "grey"
     markersize: 3
     alpha: 0.3
-  fractures:                        # fracture pole style
+  poles:                            # data poles
     color: "blue"
     marker: "+"
     markersize: 6
@@ -70,7 +69,7 @@ log = logging.getLogger("fem2geoLogger")
 AVG = {"color": MODEL_COLORS[0], "markersize": 8, "markeredgecolor": "k"}
 CELL = {"color": "grey", "markersize": 3, "alpha": 0.3}
 CONTOUR = {"color": "grey", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
-DATA = {"color": MODEL_COLORS[1], "markersize": 6, "alpha": 0.8, "marker": "+"}
+POLES = {"color": MODEL_COLORS[1], "markersize": 6, "alpha": 0.8, "marker": "+"}
 
 MARKERS = ("o", "s", "v")
 
@@ -79,7 +78,7 @@ def parse_common(cfg, job_dir):
     plot = cfg.get("plot", {})
     avg = plot.get("principals", {})
     cell = plot.get("cell_principals", {})
-    frac = plot.get("fractures", {})
+    poles = plot.get("poles", {})
     cell_style = cell.get("style", "scatter")
     cell_base = CONTOUR if cell_style == "contour" else CELL
     which = cfg.get("tensor", "stress")
@@ -99,7 +98,7 @@ def parse_common(cfg, job_dir):
         "cell_show": cell.get("show", False),
         "cell_style": cell_style,
         "cell_props": get_style(cell_base, cell),
-        "data_style": get_style(DATA, frac),
+        "pole_style": get_style(POLES, poles),
         "out": resolve_output(cfg, job_dir),
     }
 
@@ -107,7 +106,7 @@ def parse_common(cfg, job_dir):
 def parse_site(entry, job_dir):
     site = dict(entry)
     site["center"] = np.asarray(site["center"], dtype=float)
-    site["fractures"] = load_structural_csv((job_dir / site["data"]).resolve())
+    site["poles"] = load_structural_csv((job_dir / site["data"]).resolve())
     return site
 
 
@@ -120,7 +119,7 @@ def parse(cfg, job_dir):
 def compute(ax, model, site, params):
     legend = []
     labels = params["labels"]
-    ds = params["data_style"]
+    ps = params["pole_style"]
 
     if params["cell_show"]:
         vecs = np.stack([model.dir_s1, model.dir_s2, model.dir_s3], axis=-1)
@@ -144,11 +143,11 @@ def compute(ax, model, site, params):
                    alpha=0.3, label="Cell Directions")
         )
 
-    fd = site["fractures"]
-    stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1], **ds)
+    fd = site["poles"]
+    stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1], **ps)
     legend.append(
-        Line2D([0], [0], color=ds.get("color", DATA["color"]), lw=0,
-               marker=ds.get("marker", "+"), label="Fracture Poles")
+        Line2D([0], [0], color=ps.get("color", POLES["color"]), lw=0,
+               marker=ps.get("marker", "+"), label="Fracture Poles")
     )
 
     return legend

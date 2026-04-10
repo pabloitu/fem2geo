@@ -1,0 +1,33 @@
+job: tendency
+schema: adeli3
+variant: slip
+
+model: ../data/reverse_fault.vtu
+
+site:
+  center: [8000, 6000, -2000]
+  radius: 200
+  data: ../data/faults.csv
+
+plot:
+  title: "Slip tendency"
+  figsize: [9, 9]
+  dpi: 300
+  legend_size: 9
+  legend_loc: "best"
+  stress_values: true
+  principals:
+    color: "white"
+    markersize: 10
+  poles:
+    color: "red"
+    marker: "."
+    markersize: 10
+    alpha: 0.8
+  colorbar:
+    cmap: "viridis"
+    levels: 8
+
+output:
+  dir: results/
+  figure: slip_tendency.png

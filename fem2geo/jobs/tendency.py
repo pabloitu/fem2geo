@@ -1,59 +1,56 @@
 """
 Job: tendency
-==================
-Plots slip, dilation, combined, or paired tendency fields on a stereonet
-for one model at one extraction zone. Average stress principal directions
-are overlaid by default. Individual cell directions can optionally be
-shown to visualise the spread around the average.
+=============
+Plots slip, dilation, or summarized reactivation tendency on a stereonet for
+one model and one site. The model's average principal directions are placed
+on the tendency field. An optional dataset (fractures or faults) can be drawn
+as poles on top.
 
-Tendency types:
+Tendency variants:
 
-- ``slip``: normalized slip tendency Ts' (Morris et al., 1996), range [0, 1].
-- ``dilation``: dilation tendency Td (Ferrill et al., 1999), range [0, 1].
-- ``combined``: Ts' + Td (Ferrill et al., 2020), range [0, 2].
-- ``both``: side-by-side slip and dilation panels.
+- ``slip``: normalized slip tendency Ts' (Morris and Ferrill, 1996), range [0, 1].
+- ``dilation``: dilation tendency Td (Ferrill et al., 2020), range [0, 1].
+- ``summarized``: Ts' + Td (Jolie et al., 2016), range [0, 2].
 
 Config reference
 ----------------
 job: tendency
-schema: adeli               # built-in schema name (default: adeli)
+schema: adeli                       # built-in schema name (default: adeli)
+variant: slip                       # slip | dilation | summarized
 
-model: path/to/model.vtk    # relative to this config file
+model: path/to/model.vtu            # relative to this config file
 
-zone:
-  type: sphere              # sphere | box
+site:
   center: [x, y, z]
-  radius: r                 # sphere only
-  # dim: [dx, dy, dz]       # box only
-
-data:                               # optional fracture datasets overlaid as poles
-  set_a: path/to/fractures_a.csv
-  set_b: path/to/fractures_b.csv
+  radius: r
+  data: path/to/data.csv            # optional fracture or fault CSV
 
 plot:
-  title: ""                 # optional, auto-generated if empty
-  figsize: [16, 8]          # default for both; [8, 8] for single
+  title: "Slip tendency"            # optional, auto-generated if empty
+  figsize: [8, 8]
   dpi: 200
-  tendency: both            # slip | dilation | combined | both
-  n_strikes: 180            # stereonet grid resolution
-  n_dips: 45
-  avg_directions:           # average stress directions (default: show=true)
-    show: true
+  legend_size: 8
+  legend_loc: "best"
+  stress_values: false              # append σ1, σ3, φ to the title
+  principals:                       # model average (always shown)
     color: "white"
     markersize: 8
-  cell_directions:          # per-cell directions to show spread (default: show=false)
-    show: false
-    style: scatter          # scatter | contour
-    color: "k"
-    markersize: 3
-    alpha: 0.4
-  data:                     # shared style for fracture pole datasets
+  poles:                            # data pole overlay (fractures or faults)
+    color: "black"
+    marker: "+"
     markersize: 5
     alpha: 0.7
+  colorbar:                         # tendency field colormap
+    cmap: "viridis"                 # any matplotlib cmap name
+    levels: 10                      # int (n bins) or list of bin edges
+    shrink: 0.6
+    pad: 0.08
+    orientation: "vertical"
 
 output:
-  dir: results/             # optional, defaults to config file directory
-  vtu: extract.vtu          # optional, saves extracted sub-model
+  dir: results/
+  figure: tendency.png
+  vtu: extract.vtu
 
 Example
 -------
@@ -61,178 +58,193 @@ fem2geo config.yaml
 """
 
 import logging
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 from fem2geo.internal.io import load_structural_csv
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
-from fem2geo.plots import (
-    MODEL_COLORS,
-    get_style,
-    stereo_field,
-    stereo_axes,
-    stereo_axes_contour,
-    stereo_pole,
-)
+from fem2geo.plots import get_style, stereo_field, stereo_axes, stereo_pole
 from fem2geo.runner import resolve_output
-from fem2geo.utils.tensor import slip_tendency, dilation_tendency, summarized_tendency
+from fem2geo.utils.tensor import (
+    slip_tendency, dilation_tendency, summarized_tendency,
+)
 from fem2geo.utils.transform import grid_nodes, grid_centers
 
 log = logging.getLogger("fem2geoLogger")
 
-_VALID_TENDENCIES = ("slip", "dilation", "combined", "both")
+AVG = {"color": "white", "markersize": 8, "markeredgecolor": "k"}
+POLES = {"color": "black", "markersize": 5, "alpha": 0.7, "marker": "+"}
+CBAR = {"cmap": "magma", "levels": None, "shrink": 0.6, "pad": 0.08,
+        "orientation": "vertical"}
 
-# Plot defaults
-AVG_STYLE = {"color": "white", "markersize": 8, "markeredgecolor": "k"}
-CELL_STYLE = {"color": "k", "markersize": 3, "alpha": 0.4}
-CONTOUR_STYLE = {"color": "k", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
-DATA_STYLE = {"markersize": 5, "alpha": 0.7, "marker": "+"}
+LABELS = (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$")
+MARKERS = ("o", "s", "v")
 
-_CBAR_LABELS = {
-    "slip": r"Slip tendency $T'_s$",
-    "dilation": r"Dilation tendency $T_d$",
-    "combined": r"Combined tendency $T'_s + T_d$",
-}
-
-_TITLES = {
-    "slip": "Slip tendency",
-    "dilation": "Dilation tendency",
-    "combined": "Combined tendency",
-}
-
-TENDENCY_FUNCTIONS = {
+FUNCTIONS = {
     "slip": slip_tendency,
     "dilation": dilation_tendency,
-    "combined": summarized_tendency,
+    "summarized": summarized_tendency,
 }
 
+CBAR_LABELS = {
+    "slip": r"Slip tendency $T'_s$",
+    "dilation": r"Dilation tendency $T_d$",
+    "summarized": r"Summarized tendency $T'_s + T_d$",
+}
 
-_VMAX = {"slip": 1.0, "dilation": 1.0, "combined": 2.0}
+TITLES = {
+    "slip": "Slip tendency",
+    "dilation": "Dilation tendency",
+    "summarized": "Summarized tendency",
+}
+
+VMAX = {"slip": 1.0, "dilation": 1.0, "summarized": 2.0}
 
 
-def run(cfg: dict, job_dir: Path) -> None:
-
-    # load config
-    out = resolve_output(cfg, job_dir)
-    out_dir = out["dir"]
-    schema = ModelSchema.builtin(cfg.get("schema", "adeli"))
-    zone = cfg.get("zone", {})
+def parse_common(cfg, job_dir):
     plot = cfg.get("plot", {})
-
-    tendency = plot.get("tendency", "both")
-    n_strikes = plot.get("n_strikes", 180)
-    n_dips = plot.get("n_dips", 45)
-    stress_values = plot.get("stress_values", False)
-
-    avg_cfg = plot.get("avg_directions", {})
-    show_avg = avg_cfg.get("show", True)
-    avg_style = get_style(AVG_STYLE, avg_cfg)
-
-    cell_cfg = plot.get("cell_directions", {})
-    show_cell = cell_cfg.get("show", False)
-    cell_style = cell_cfg.get("style", "scatter")
-    cell_base = CONTOUR_STYLE if cell_style == "contour" else CELL_STYLE
-    cell_pc = get_style(cell_base, cell_cfg)
-
-    # load model and extract zone
-    path = (job_dir / cfg["model"]).resolve()
-
-    # model
-    log.info(f"Loading model: {path}")
-    model = Model.from_file(path, schema)
-    sub = model.extract(zone)
-    log.info(f"  {sub.n_cells} cells in zone")
-
-    avg_stress = sub.avg_tensor("stress")
-    val, vec = sub.avg_principals("stress")
-    phi = float((val[1] - val[2]) / (val[0] - val[2]))
-
-    # stereonet grid
-    mesh_strike, mesh_dip = grid_nodes(n_strikes, n_dips)
-    centers_strike, centers_dip = grid_centers(mesh_strike, mesh_dip)
-
-    # figure
-    is_double = tendency == "both"
-    figsize = plot.get("figsize", [16, 8] if is_double else [8, 8])
-    fig = plt.figure(figsize=figsize)
-
-    if is_double:
-        panels = {
-            "slip": fig.add_subplot(121, projection="stereonet"),
-            "dilation": fig.add_subplot(122, projection="stereonet"),
-        }
-    else:
-        panels = {tendency: fig.add_subplot(111, projection="stereonet")}
-
-    for ax in panels.values():
-        ax.grid(True)
-        ax.set_azimuth_ticks([])
-
-    # tendency fields
-    for kind, ax in panels.items():
-        vals = TENDENCY_FUNCTIONS[kind](
-            avg_stress, centers_strike.ravel(), centers_dip.ravel()
-        ).reshape(centers_strike.shape)
-        stereo_field(
-            ax,
-            mesh_strike,
-            mesh_dip,
-            vals,
-            vmin=0.0,
-            vmax=_VMAX[kind],
-            cbar_label=_CBAR_LABELS[kind],
+    avg = plot.get("principals", {})
+    poles = plot.get("poles", {})
+    cbar = plot.get("colorbar", {})
+    variant = cfg.get("variant", "slip")
+    if variant not in FUNCTIONS:
+        raise ValueError(
+            f"Unknown variant '{variant}'. Valid: {list(FUNCTIONS)}"
         )
 
-    # cell directions
-    if show_cell:
-        cell_vecs = np.stack([sub.dir_s1, sub.dir_s2, sub.dir_s3], axis=-1)
-        for ax in panels.values():
-            if cell_style == "contour":
-                stereo_axes_contour(ax, cell_vecs, cell_pc)
-            else:
-                stereo_axes(ax, cell_vecs, cell_pc)
+    merged_cbar = {**CBAR, **cbar}
 
-    # average principal directions
-    if show_avg:
-        labels = (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$")
-        for ax in panels.values():
-            stereo_axes(ax, vec, avg_style, labels=labels)
+    return {
+        "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
+        "model_path": (job_dir / cfg["model"]).resolve(),
+        "job_dir": job_dir,
+        "variant": variant,
+        "title": plot.get("title", ""),
+        "figsize": plot.get("figsize", [8, 8]),
+        "dpi": plot.get("dpi", 200),
+        "legend_size": plot.get("legend_size", 8),
+        "legend_loc": plot.get("legend_loc", "best"),
+        "stress_values": plot.get("stress_values", False),
+        "n_strikes": plot.get("n_strikes", 180),
+        "n_dips": plot.get("n_dips", 45),
+        "avg_style": get_style(AVG, avg),
+        "pole_style": get_style(POLES, poles),
+        "cbar_opts": merged_cbar,
+        "out": resolve_output(cfg, job_dir),
+    }
 
-    # fracture data overlays
-    if cfg.get("data"):
-        data_style = get_style(DATA_STYLE, plot.get("data", {}))
-        data_colors = MODEL_COLORS[1 : len(cfg["data"]) + 1]
-        for color, (name, path) in zip(data_colors, cfg["data"].items()):
-            fd = load_structural_csv((job_dir / path).resolve())
-            for ax in panels.values():
-                stereo_pole(
-                    ax,
-                    fd.planes[:, 0],
-                    fd.planes[:, 1],
-                    label=name,
-                    **get_style(data_style, color=color),
-                )
 
-    # plots
-    if stress_values:
-        suffix = (
-            f"\n$\\sigma_1={val[0]:.3f}$, $\\sigma_3={val[2]:.3f}$, $\\phi={phi:.2f}$"
+def parse_site(entry, job_dir):
+    site = dict(entry)
+    site["center"] = np.asarray(site["center"], dtype=float)
+    if "data" in entry:
+        site["poles"] = load_structural_csv(
+            (job_dir / entry["data"]).resolve()
         )
     else:
-        suffix = ""
-    custom_title = plot.get("title", "")
-    for kind, ax in panels.items():
-        ax.set_title(custom_title + suffix if custom_title else _TITLES[kind] + suffix,
-                     y=1.05)
-        ax.legend(fontsize=7)
+        site["poles"] = None
+    return site
 
-    fig.savefig(
-        out_dir / out.get("figure", "tendency.png"),
-        dpi=plot.get("dpi", 200),
-        bbox_inches="tight",
+
+def parse(cfg, job_dir):
+    params = parse_common(cfg, job_dir)
+    params["site"] = parse_site(cfg["site"], job_dir)
+    return params
+
+
+def compute(ax, model, site, params, cbar=True):
+    legend = []
+    variant = params["variant"]
+    ps = params["pole_style"]
+    cb = params["cbar_opts"]
+
+    # tendency field
+    avg_stress = model.avg_tensor("stress")
+    ms, md = grid_nodes(params["n_strikes"], params["n_dips"])
+    cs, cd = grid_centers(ms, md)
+    vals = FUNCTIONS[variant](
+        avg_stress, cs.ravel(), cd.ravel()
+    ).reshape(cs.shape)
+
+    stereo_field(
+        ax, ms, md, vals,
+        cmap=cb["cmap"],
+        vmin=0.0, vmax=VMAX[variant],
+        levels=cb["levels"],
+        cbar=cbar,
+        cbar_label=CBAR_LABELS[variant],
+        cbar_kwargs={"shrink": cb["shrink"], "pad": cb["pad"],
+                     "orientation": cb["orientation"]},
     )
+
+    # principal directions
+    _, vec = model.avg_principals("stress")
+    stereo_axes(ax, vec, params["avg_style"], labels=LABELS)
+
+    legend.extend([
+        Line2D([0], [0], color=params["avg_style"].get("color", "white"),
+               markeredgecolor="k", lw=0, marker=MARKERS[i], label=LABELS[i])
+        for i in range(3)
+    ])
+
+    # pole overlay (fractures or faults — only strike/dip used)
+    if site["poles"] is not None:
+        fd = site["poles"]
+        stereo_pole(ax, fd.planes[:, 0], fd.planes[:, 1], **ps)
+        legend.append(
+            Line2D([0], [0], color=ps.get("color", "black"), lw=0,
+                   marker=ps.get("marker", "+"), label="poles")
+        )
+
+    return legend
+
+
+def draw(model, site, params):
+    fig = plt.figure(figsize=params["figsize"])
+    ax = fig.add_subplot(111, projection="stereonet")
+    ax.grid(True)
+    ax.set_azimuth_ticks([])
+
+    legend = compute(ax, model, site, params, cbar=True)
+
+    val, _ = model.avg_principals("stress")
+    title = params["title"] or TITLES[params["variant"]]
+    if params["stress_values"]:
+        phi = float((val[1] - val[2]) / (val[0] - val[2]))
+        title = (
+            f"{title}\n"
+            rf"$\sigma_1={val[0]:.3f}$, "
+            rf"$\sigma_3={val[2]:.3f}$, "
+            rf"$\phi={phi:.2f}$"
+        )
+    ax.set_title(title, y=1.05)
+
+    ax.legend(handles=legend, prop={"size": params["legend_size"]},
+              loc=params["legend_loc"])
+
+    out = params["out"]
+    fig.savefig(out["dir"] / out.get("figure", "tendency.png"),
+                dpi=params["dpi"], bbox_inches="tight")
     plt.close(fig)
-    log.info(f"Saved results: {out_dir}")
+    return fig
+
+
+def run(cfg, job_dir):
+    params = parse(cfg, job_dir)
+    site = params["site"]
+
+    log.info(f"Loading {params['model_path']}")
+    model = Model.from_file(params["model_path"], params["schema"])
+    sub = model.extract(site["center"], site["radius"])
+    log.info(f"  {sub.n_cells} cells in site")
+
+    draw(sub, site, params)
+
+    out = params["out"]
+    if "vtu" in out:
+        sub.save(out["dir"] / out["vtu"])
+
+    log.info(f"Saved results in: {out['dir']}")

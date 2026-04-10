@@ -23,10 +23,10 @@ plot:
     color: grey
     markersize: 1
     alpha: 0.3
-  fractures:
+  poles:
     color: "blue"
     marker: "x"
-    markersize: 10
+    markersize: 7
     alpha: 0.6
 
 output:
