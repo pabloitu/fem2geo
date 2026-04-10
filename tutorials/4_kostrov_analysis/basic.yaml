@@ -1,6 +1,6 @@
 job: kostrov
 schema: adeli3
-tensor: strain
+tensor: stress
 
 model: ../data/reverse_fault.vtu
 

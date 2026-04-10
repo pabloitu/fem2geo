@@ -5,7 +5,7 @@ model: ../data/reverse_fault.vtu
 
 site:
   center: [8000, 6000, -2000]
-  radius: 400
+  radius: 200
   data: ../data/faults.csv
 
 plot:
