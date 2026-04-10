@@ -1,22 +1,21 @@
 job: principal_directions
-schema: adeli
-
-model: ../data/small_box.vtk
-
-site: {center: [22, 22, -7], radius: 0.8}
-
+schema: adeli3
+model: ../data/reverse_fault.vtu
+tensor: strain
+site: {center: [10000, 5000, -2500], radius: 200}
 plot:
-  title: "Principal stress directions"
-  figsize: [9, 9]
+  title: "Principal strain directions"
+  figsize: [8, 8]
   dpi: 300
-  avg_directions:
-    show: true
+  principals:
+    color: "red"
     markersize: 10
-  cell_directions:
+  cell_principals:
     show: true
     style: scatter
-    markersize: 3
-    alpha: 0.3
-
+    markersize: 2
+    alpha: 0.2
 output:
   dir: scatter/
+  figure: principal_scatter.png
+  vtu: sphere.vtu

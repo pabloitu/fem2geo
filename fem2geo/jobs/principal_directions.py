@@ -2,13 +2,15 @@
 Job: principal_directions
 =========================
 Probes a model at a given site by plotting principal stress directions on a
-stereonet. By default, shows the model's average σ1/σ2/σ3 directions only.
-Per-cell directions can be enabled to visualise the spread around the average.
+stereonet. Shows the model's average principal directions, with optional
+per-cell spread visualisation.
 
 Config reference
 ----------------
 job: principal_directions
 schema: adeli                       # built-in schema name (default: adeli)
+tensor: stress                      # stress | stress_dev | strain | strain_rate
+                                    # strain_plastic | strain_elastic
 
 model: path/to/model.vtk            # relative to this config file
 
@@ -20,12 +22,12 @@ plot:
   title: "Principal stress directions"
   figsize: [8, 8]
   dpi: 200
-  avg_directions:                   # model average σ1/σ2/σ3 (default: show=true)
-    show: true
+  legend_size: 8                    # scales legend
+  legend_loc: "best"                # best | 1 (upper right) | 2 | 3 | 4
+  principals:                       # model average
     color: "red"
-    marker: "o"
     markersize: 8
-  cell_directions:                  # per-cell model directions (default: show=false)
+  cell_principals:                  # per-cell directions (default: show=false)
     show: false
     style: scatter                  # scatter | contour
     color: "red"
@@ -33,9 +35,9 @@ plot:
     alpha: 0.4
 
 output:
-  dir: results/                     # optional, defaults to config file directory
+  dir: results/
   figure: principal_directions.png
-  vtu: extract.vtu                  # save extracted sub-model for Paraview
+  vtu: extract.vtu
 
 Example
 -------
@@ -52,34 +54,35 @@ from fem2geo.model import Model
 from fem2geo.internal.schema import ModelSchema
 from fem2geo.plots import get_style, stereo_axes, stereo_axes_contour
 from fem2geo.runner import resolve_output
+from fem2geo.utils.tensor import TENSOR_LABELS
 
 log = logging.getLogger("fem2geoLogger")
 
 AVG = {"color": "red", "markersize": 8, "markeredgecolor": "k"}
-CELL = {"color": "red", "markersize": 3, "markeredgecolor": "none", "alpha": 0.4}
+CELL = {"color": "red", "markersize": 3, "markeredgecolor": "k", "alpha": 0.4}
 CONTOUR = {"color": "red", "levels": 4, "sigma": 2.0, "linewidth": 1.0}
 
-LEGEND = [
-    Line2D([0], [0], color="k", lw=0, marker="o", label=r"$\sigma_1$"),
-    Line2D([0], [0], color="k", lw=0, marker="s", label=r"$\sigma_2$"),
-    Line2D([0], [0], color="k", lw=0, marker="v", label=r"$\sigma_3$"),
-]
+MARKERS = ("o", "s", "v")
 
 
 def parse_common(cfg, job_dir):
     plot = cfg.get("plot", {})
-    avg = plot.get("avg_directions", {})
-    cell = plot.get("cell_directions", {})
+    avg = plot.get("principals", {})
+    cell = plot.get("cell_principals", {})
     cell_style = cell.get("style", "scatter")
     cell_base = CONTOUR if cell_style == "contour" else CELL
+    which = cfg.get("tensor", "stress")
 
     return {
         "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
         "model_path": (job_dir / cfg["model"]).resolve(),
-        "title": plot.get("title", "Principal stress directions"),
+        "which": which,
+        "labels": TENSOR_LABELS[which],
+        "title": plot.get("title", "Principal directions"),
         "figsize": plot.get("figsize", [8, 8]),
         "dpi": plot.get("dpi", 200),
-        "avg_show": avg.get("show", True),
+        "legend_size": plot.get("legend_size", 8),
+        "legend_loc": plot.get("legend_loc", "best"),
         "avg_style": get_style(AVG, avg),
         "cell_show": cell.get("show", False),
         "cell_style": cell_style,
@@ -101,6 +104,9 @@ def parse(cfg, job_dir):
 
 
 def compute(ax, model, site, params):
+    legend = []
+    labels = params["labels"]
+
     if params["cell_show"]:
         vecs = np.stack([model.dir_s1, model.dir_s2, model.dir_s3], axis=-1)
         if params["cell_style"] == "contour":
@@ -108,10 +114,22 @@ def compute(ax, model, site, params):
         else:
             stereo_axes(ax, vecs, params["cell_props"])
 
-    if params["avg_show"]:
-        _, vec = model.avg_principals("stress")
-        stereo_axes(ax, vec, params["avg_style"],
-                    labels=(r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$"))
+    _, vec = model.avg_principals(params["which"])
+    stereo_axes(ax, vec, params["avg_style"], labels=labels)
+
+    legend.extend([
+        Line2D([0], [0], color="k", lw=0, marker=MARKERS[i], label=labels[i])
+        for i in range(3)
+    ])
+
+    if params["cell_show"]:
+        color = params["cell_props"].get("color", "red")
+        legend.append(
+            Line2D([0], [0], color=color, lw=0, marker=".",
+                   alpha=0.4, label="Cell Directions")
+        )
+
+    return legend
 
 
 def draw(model, site, params):
@@ -119,9 +137,10 @@ def draw(model, site, params):
     ax = fig.add_subplot(111, projection="stereonet")
     ax.grid(True)
 
-    compute(ax, model, site, params)
+    legend = compute(ax, model, site, params)
 
-    ax.legend(handles=LEGEND, fontsize=7)
+    ax.legend(handles=legend, prop={"size": params["legend_size"]},
+              loc=params["legend_loc"])
     ax.set_title(params["title"], y=1.08)
 
     out = params["out"]
@@ -144,6 +163,7 @@ def run(cfg, job_dir):
 
     out = params["out"]
     if "vtu" in out:
+        print(out["dir"] / out["vtu"])
         sub.save(out["dir"] / out["vtu"])
 
     log.info(f"Saved results in: {out['dir']}")

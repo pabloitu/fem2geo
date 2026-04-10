@@ -30,6 +30,32 @@ _COMP_IDX = {
 }
 
 
+TENSOR_LABELS = {
+    "stress": (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$"),
+    "stress_dev": (
+        r"$\sigma^{\mathrm{dev}}_1$",
+        r"$\sigma^{\mathrm{dev}}_2$",
+        r"$\sigma^{\mathrm{dev}}_3$",
+    ),
+    "strain": (r"$\epsilon_1$", r"$\epsilon_2$", r"$\epsilon_3$"),
+    "strain_rate": (
+        r"$\dot{\epsilon}_1$",
+        r"$\dot{\epsilon}_2$",
+        r"$\dot{\epsilon}_3$",
+    ),
+    "strain_plastic": (r"$\epsilon^p_1$", r"$\epsilon^p_2$", r"$\epsilon^p_3$"),
+    "strain_elastic": (r"$\epsilon^e_1$", r"$\epsilon^e_2$", r"$\epsilon^e_3$"),
+}
+
+TENSOR_SYMBOL = {
+    "stress": r"$\sigma$",
+    "stress_dev": r"$\sigma^{\mathrm{dev}}$",
+    "strain": r"$\epsilon$",
+    "strain_rate": r"$\dot{\epsilon}$",
+    "strain_plastic": r"$\epsilon^p$",
+    "strain_elastic": r"$\epsilon^e$",
+}
+
 def unpack_voigt6(tensor_voight):
     """
     Unpack (N, 6) Voigt-ordered array into (N, 3, 3) symmetric tensors.
