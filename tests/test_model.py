@@ -70,6 +70,20 @@ _SCHEMA_VOIGT = ModelSchema.from_dict({
     "fields": {"dir_s1": {"field": "dir_s1"}, "dir_s3": {"field": "dir_s3"}},
 })
 
+_SCHEMA_PLASTIC = ModelSchema.from_dict({
+    "solver": "t",
+    "tensors": {"stress": {"components": {
+        c: c for c in ("xx","yy","zz","xy","yz","zx")}}},
+    "fields": {
+        "dir_s1": {"field": "dir_s1"},
+        "dir_s3": {"field": "dir_s3"},
+        "val_s1": {"field": "val_s1"},
+        "val_s3": {"field": "val_s3"},
+        "plastic_eff": {"field": "plastic_eff"},
+        "plastic_vol": {"field": "plastic_vol"},
+    },
+})
+
 _SCHEMA_EMPTY = ModelSchema.from_dict({"solver": "t", "fields": {}})
 
 
@@ -188,6 +202,11 @@ class TestAverages(unittest.TestCase):
         self.assertEqual(avg.shape, (3, 3))
         np.testing.assert_allclose(avg, avg.T, atol=1e-12)
 
+    def test_avg_tensor_symmetrized(self):
+        m = _model_comp()
+        avg = m.avg_tensor("stress")
+        np.testing.assert_allclose(avg, avg.T, atol=1e-12)
+
     def test_stress_dev_removes_isotropic(self):
         data = {
             "_tensor_stress_xx": np.array([-3, -3, -3, -3.0]),
@@ -208,6 +227,37 @@ class TestAverages(unittest.TestCase):
             self.assertAlmostEqual(dot, 1.0, places=10)
 
 
+class TestStrainReconstruction(unittest.TestCase):
+
+    def _plastic_grid(self, eff, vol):
+        data = {
+            **_COMP_DATA,
+            "val_s1": np.full(_N, -2.0),
+            "val_s3": np.full(_N, 0.0),
+            "plastic_eff": np.full(_N, eff),
+            "plastic_vol": np.full(_N, vol),
+        }
+        return Model(_grid(data), _SCHEMA_PLASTIC)
+
+    def test_zero_plastic_returns_zero_tensor(self):
+        m = self._plastic_grid(0.0, 0.0)
+        ep = m.strain_plastic
+        self.assertEqual(ep.shape, (_N, 3, 3))
+        np.testing.assert_allclose(ep, 0, atol=1e-12)
+
+    def test_nonzero_plastic_reconstruction(self):
+        m = self._plastic_grid(0.01, 0.005)
+        ep = m.strain_plastic
+        self.assertEqual(ep.shape, (_N, 3, 3))
+        np.testing.assert_allclose(ep, ep.transpose(0, 2, 1), atol=1e-12)
+
+    def test_missing_plastic_fields_assumes_elastic(self):
+        m = _model_comp()
+        with self.assertLogs("fem2geoLogger", level="INFO"):
+            ep = m.strain_plastic
+        np.testing.assert_allclose(ep, 0, atol=1e-12)
+
+
 class TestExtraction(unittest.TestCase):
 
     def setUp(self):
@@ -226,7 +276,15 @@ class TestExtraction(unittest.TestCase):
         ids = self.m.grid.extract_cells.call_args[0][0]
         np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
 
-    def test_empty_mask_no_crash(self):
+    def test_extract_empty_raises(self):
+        empty = MagicMock()
+        empty.n_cells = 0
+        empty.number_of_cells = 0
+        self.m.grid.extract_cells.return_value = empty
+        with self.assertRaises(ValueError):
+            self.m.extract([1000, 1000, 1000], 0.001)
+
+    def test_extract_cells_returns_unstructured_on_empty(self):
         result = self.m._extract_cells(np.zeros(4, dtype=bool))
         self.assertIsNotNone(result)
 
