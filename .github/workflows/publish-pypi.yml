@@ -22,7 +22,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           generate-run-shell: true
-          environment-file: environment.yml
+          environment-file: environment.yaml
           create-args: >-
             python=3.11
 
