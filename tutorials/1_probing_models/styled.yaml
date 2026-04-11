@@ -1,0 +1,21 @@
+job: principal_directions
+schema: adeli3
+model: ../data/reverse_fault.vtu
+tensor: strain
+site: {center: [10000, 5000, -2500], radius: 200}
+plot:
+  title: "Principal strain directions"
+  figsize: [8, 8]
+  dpi: 300
+  principals:
+    color: "red"
+    markersize: 10
+  cell_principals:
+    show: true
+    style: scatter
+    markersize: 2
+    alpha: 0.2
+output:
+  dir: scatter/
+  figure: principal_scatter.png
+  vtu: sphere.vtu

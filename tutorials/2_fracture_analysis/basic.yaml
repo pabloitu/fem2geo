@@ -1,0 +1,13 @@
+job: fracture
+schema: adeli3
+
+model: ../data/normal_fault.vtu
+
+site:
+  center: [8000, 5000, -3000]
+  radius: 200
+  data: ../data/fractures.csv
+
+output:
+  dir: ./
+  figure: fracture.png

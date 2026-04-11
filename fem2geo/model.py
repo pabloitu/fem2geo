@@ -402,29 +402,7 @@ class Model:
 
     # extraction
 
-    def extract(self, zone: dict) -> "Model":
-        """
-        Extract a sub-model from a zone config dict.
-
-        Parameters
-        ----------
-        zone : dict
-            Must contain ``type`` (``"sphere"`` or ``"box"``),
-            ``center``, and ``radius`` (sphere) or ``dim`` (box).
-
-        Returns
-        -------
-        Model
-            A new Model containing only cells within the zone.
-        """
-        kind = zone["type"]
-        if kind == "sphere":
-            return self.extract_sphere(zone["center"], zone["radius"])
-        if kind == "box":
-            return self.extract_box(zone["center"], zone["dim"])
-        raise ValueError(f"Unknown zone type '{kind}'.")
-
-    def extract_sphere(self, center, radius) -> "Model":
+    def extract(self, center, radius) -> "Model":
         """
         Extract cells whose nodes fall within a sphere.
 
@@ -434,35 +412,16 @@ class Model:
             Sphere center in model coordinates.
         radius : float
             Sphere radius.
-
-        Returns
-        -------
-        Model
         """
         center = np.asarray(center)
         dist = np.linalg.norm(self.grid.points - center, axis=1)
-        return Model(self._extract_cells(dist < radius), self.schema)
-
-    def extract_box(self, center, dim) -> "Model":
-        """
-        Extract cells whose nodes fall within an axis-aligned box.
-
-        Parameters
-        ----------
-        center : array-like, shape (3,)
-            Box center in model coordinates.
-        dim : array-like, shape (3,)
-            Box dimensions (full width in each direction).
-
-        Returns
-        -------
-        Model
-        """
-        center, dim = np.asarray(center), np.asarray(dim)
-        lo, hi = center - dim / 2.0, center + dim / 2.0
-        pts = self.grid.points
-        mask = np.all((pts >= lo) & (pts <= hi), axis=1)
-        return Model(self._extract_cells(mask), self.schema)
+        sub = Model(self._extract_cells(dist < radius), self.schema)
+        if sub.n_cells == 0:
+            raise ValueError(
+                f"No cells found in sphere at {center.tolist()} with "
+                f"radius {radius}"
+            )
+        return sub
 
     # averages
 

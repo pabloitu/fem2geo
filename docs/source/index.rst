@@ -141,6 +141,7 @@ Useful links
    tutorials/resolved-shear
    tutorials/kostrov
    tutorials/tendency
+   tutorials/multi-sites
    tutorials/projections
 
 

@@ -1,0 +1,33 @@
+job: sites.fracture
+schema: adeli3
+
+model: ../data/reverse_fault.vtu
+
+sites:
+  outcrop_1:
+    center: [8000, 6000, -1500]
+    radius: 300
+    data: ../data/fractures.csv
+  outcrop_2:
+    center: [8000, 6000, -2500]
+    radius: 300
+    data: ../data/fractures_b.csv
+
+plot:
+  title: "Fracture populations vs local stress"
+  figsize: [14, 7]
+  dpi: 300
+  legend_size: 18
+  principals:
+    color: "red"
+    markersize: 10
+  cell_principals:
+    show: true
+    style: scatter
+    color: grey
+    markersize: 1
+    alpha: 0.3
+
+output:
+  dir: multi_site/
+  figure: fracture_multi.png

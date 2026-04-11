@@ -1,0 +1,6 @@
+job: principal_directions
+schema: adeli3
+model: ../data/reverse_fault.vtu
+site: {center: [10000, 5000, -2500], radius: 200}
+output:
+  dir: ./

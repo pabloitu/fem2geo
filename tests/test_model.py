@@ -70,6 +70,20 @@ _SCHEMA_VOIGT = ModelSchema.from_dict({
     "fields": {"dir_s1": {"field": "dir_s1"}, "dir_s3": {"field": "dir_s3"}},
 })
 
+_SCHEMA_PLASTIC = ModelSchema.from_dict({
+    "solver": "t",
+    "tensors": {"stress": {"components": {
+        c: c for c in ("xx","yy","zz","xy","yz","zx")}}},
+    "fields": {
+        "dir_s1": {"field": "dir_s1"},
+        "dir_s3": {"field": "dir_s3"},
+        "val_s1": {"field": "val_s1"},
+        "val_s3": {"field": "val_s3"},
+        "plastic_eff": {"field": "plastic_eff"},
+        "plastic_vol": {"field": "plastic_vol"},
+    },
+})
+
 _SCHEMA_EMPTY = ModelSchema.from_dict({"solver": "t", "fields": {}})
 
 
@@ -162,8 +176,6 @@ class TestEigen(unittest.TestCase):
         np.testing.assert_allclose(self.m.val_s3, vals[:, 2], atol=1e-12)
 
     def test_eigenvalues_strain(self):
-        # strain is assembled via TensorField — needs schema with strain tensor
-        # just verify the call dispatches without error on stress_dev
         vals = self.m.eigenvalues("stress_dev")
         self.assertEqual(vals.shape, (_N, 3))
 
@@ -190,8 +202,12 @@ class TestAverages(unittest.TestCase):
         self.assertEqual(avg.shape, (3, 3))
         np.testing.assert_allclose(avg, avg.T, atol=1e-12)
 
+    def test_avg_tensor_symmetrized(self):
+        m = _model_comp()
+        avg = m.avg_tensor("stress")
+        np.testing.assert_allclose(avg, avg.T, atol=1e-12)
+
     def test_stress_dev_removes_isotropic(self):
-        # build a stress with nonzero trace
         data = {
             "_tensor_stress_xx": np.array([-3, -3, -3, -3.0]),
             "_tensor_stress_yy": np.array([-2, -2, -2, -2.0]),
@@ -202,10 +218,8 @@ class TestAverages(unittest.TestCase):
         m = Model(_grid(data), _SCHEMA_COMP)
         s = m.stress
         sd = m.stress_dev
-        # trace of deviatoric should be zero per cell
         traces = np.trace(sd, axis1=1, axis2=2)
         np.testing.assert_allclose(traces, 0, atol=1e-12)
-        # eigenvectors should be the same
         _, v_full = np.linalg.eigh(s[0])
         _, v_dev = np.linalg.eigh(sd[0])
         for i in range(3):
@@ -213,43 +227,64 @@ class TestAverages(unittest.TestCase):
             self.assertAlmostEqual(dot, 1.0, places=10)
 
 
+class TestStrainReconstruction(unittest.TestCase):
+
+    def _plastic_grid(self, eff, vol):
+        data = {
+            **_COMP_DATA,
+            "val_s1": np.full(_N, -2.0),
+            "val_s3": np.full(_N, 0.0),
+            "plastic_eff": np.full(_N, eff),
+            "plastic_vol": np.full(_N, vol),
+        }
+        return Model(_grid(data), _SCHEMA_PLASTIC)
+
+    def test_zero_plastic_returns_zero_tensor(self):
+        m = self._plastic_grid(0.0, 0.0)
+        ep = m.strain_plastic
+        self.assertEqual(ep.shape, (_N, 3, 3))
+        np.testing.assert_allclose(ep, 0, atol=1e-12)
+
+    def test_nonzero_plastic_reconstruction(self):
+        m = self._plastic_grid(0.01, 0.005)
+        ep = m.strain_plastic
+        self.assertEqual(ep.shape, (_N, 3, 3))
+        np.testing.assert_allclose(ep, ep.transpose(0, 2, 1), atol=1e-12)
+
+    def test_missing_plastic_fields_assumes_elastic(self):
+        m = _model_comp()
+        with self.assertLogs("fem2geoLogger", level="INFO"):
+            ep = m.strain_plastic
+        np.testing.assert_allclose(ep, 0, atol=1e-12)
+
+
 class TestExtraction(unittest.TestCase):
 
     def setUp(self):
         self.m = _model_comp()
 
-    def test_sphere_and_box_return_model(self):
+    def test_extract_returns_model(self):
         self.assertIsInstance(
-            self.m.extract_sphere([.5, .5, -1.5], 10), Model)
-        self.assertIsInstance(
-            self.m.extract_box([.5, .5, -1.5], [5, 5, 5]), Model)
-
-    def test_extract_sphere_from_dict(self):
-        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
-        self.assertIsInstance(self.m.extract(zone), Model)
-
-    def test_extract_box_from_dict(self):
-        zone = {"type": "box", "center": [.5, .5, -1.5], "dim": [5, 5, 5]}
-        self.assertIsInstance(self.m.extract(zone), Model)
-
-    def test_extract_bad_type_raises(self):
-        with self.assertRaises(ValueError):
-            self.m.extract({"type": "cylinder", "center": [0, 0, 0]})
+            self.m.extract([.5, .5, -1.5], 10), Model)
 
     def test_preserves_schema(self):
-        sub = self.m.extract_sphere([.5, .5, -1.5], 10)
+        sub = self.m.extract([.5, .5, -1.5], 10)
         self.assertIs(sub.schema, self.m.schema)
 
-    def test_preserves_schema_via_dict(self):
-        zone = {"type": "sphere", "center": [.5, .5, -1.5], "radius": 10}
-        self.assertIs(self.m.extract(zone).schema, self.m.schema)
-
     def test_large_radius_selects_all(self):
-        self.m.extract_sphere([.5, .5, -1.5], 100)
+        self.m.extract([.5, .5, -1.5], 100)
         ids = self.m.grid.extract_cells.call_args[0][0]
         np.testing.assert_array_equal(np.sort(ids), np.arange(_N))
 
-    def test_empty_mask_no_crash(self):
+    def test_extract_empty_raises(self):
+        empty = MagicMock()
+        empty.n_cells = 0
+        empty.number_of_cells = 0
+        self.m.grid.extract_cells.return_value = empty
+        with self.assertRaises(ValueError):
+            self.m.extract([1000, 1000, 1000], 0.001)
+
+    def test_extract_cells_returns_unstructured_on_empty(self):
         result = self.m._extract_cells(np.zeros(4, dtype=bool))
         self.assertIsNotNone(result)
 

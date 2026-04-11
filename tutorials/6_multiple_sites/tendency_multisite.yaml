@@ -1,0 +1,39 @@
+job: sites.tendency
+schema: adeli3
+variant: dilation
+
+model: ../data/reverse_fault.vtu
+
+sites:
+  shallow:
+    center: [8000, 5000, -1000]
+    radius: 600
+    data: ../data/fractures_b.csv
+  mid:
+    center: [6000, 5000, -3000]
+    radius: 600
+    data: ../data/fractures_b.csv
+  deep:
+    center: [4000, 5000, -5000]
+    radius: 600
+    data: ../data/fractures_b.csv
+
+plot:
+  title: "Slip tendency along depth"
+  figsize: [6, 16]
+  grid: [3, 1]
+  dpi: 200
+  legend_size: 8
+  principals:
+    color: "black"
+    markersize: 10
+  colorbar:
+    cmap: "viridis"
+    levels: 10
+  poles:
+    color: "red"
+
+output:
+  dir: multi_site/
+  figure: tendency_profile.png
+#  per_site: true

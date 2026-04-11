@@ -42,8 +42,8 @@ def get_style(default, *overrides, drop=("show", "style"), **kw):
 
 def stereo_field(
     ax, mesh_strikes, mesh_dips, values,
-    cmap="RdYlBu_r", vmin=None, vmax=None,
-    cbar_label=None, cbar_kwargs=None,
+    cmap="viridis", vmin=None, vmax=None, levels=None,
+    cbar=True, cbar_label=None, cbar_kwargs=None,
 ):
     """
     Draw a pre-computed scalar field on a stereonet as a pcolormesh.
@@ -59,6 +59,13 @@ def stereo_field(
         Colormap name.
     vmin, vmax : float, optional
         Color scaling bounds.
+    levels : int or sequence of float, optional
+        Discrete bins. If int, creates ``levels`` evenly-spaced bins
+        between ``vmin`` and ``vmax``. If a sequence, uses its values
+        as bin edges directly. If None, draws a continuous colormap.
+    cbar : bool
+        If True, attach a colorbar to the figure. If False, only draw
+        the pcolormesh and return the mappable.
     cbar_label : str, optional
         Colorbar label.
     cbar_kwargs : dict, optional
@@ -69,11 +76,31 @@ def stereo_field(
     mappable
         The pcolormesh mappable.
     """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import BoundaryNorm
+
+    norm = None
+    edges = None
+    if levels is not None:
+        if isinstance(levels, int):
+            edges = np.linspace(vmin, vmax, levels + 1)
+        else:
+            edges = np.asarray(levels, dtype=float)
+        norm = BoundaryNorm(edges, plt.get_cmap(cmap).N)
+
     lon, lat = mplstereonet.pole(mesh_strikes, mesh_dips)
-    m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto", vmin=vmin, vmax=vmax)
-    defaults = {"shrink": 0.6, "pad": 0.08}
-    defaults.update(cbar_kwargs or {})
-    ax.get_figure().colorbar(m, ax=ax, label=cbar_label or "", **defaults)
+    if norm is not None:
+        m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto",
+                          norm=norm)
+    else:
+        m = ax.pcolormesh(lon, lat, values, cmap=cmap, shading="auto",
+                          vmin=vmin, vmax=vmax)
+    if cbar:
+        defaults = {"shrink": 0.6, "pad": 0.08}
+        if edges is not None:
+            defaults["ticks"] = edges
+        defaults.update(cbar_kwargs or {})
+        ax.get_figure().colorbar(m, ax=ax, label=cbar_label or "", **defaults)
     return m
 
 

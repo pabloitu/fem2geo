@@ -1,0 +1,34 @@
+job: resolved_shear
+schema: adeli3
+
+model: ../data/reverse_fault.vtu
+
+site:
+  center: [8000, 6000, -2000]
+  radius: 200
+  data: ../data/faults.csv
+
+plot:
+  title: "Resolved shear analysis"
+  figsize: [9, 9]
+  dpi: 300
+  legend_size: 9
+  legend_loc: 2
+  principals:
+    color: "k"
+    markersize: 10
+  planes:
+    color: "grey"
+    linewidth: 1.0
+    alpha: 0.4
+  observed:
+    color: "red"
+    linewidth: 2.0
+    arrowsize: 1.2
+  predicted:
+    color: "green"
+    linewidth: 2.0
+    arrowsize: 1.2
+
+output:
+  dir: styled/
