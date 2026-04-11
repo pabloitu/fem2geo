@@ -1,16 +1,9 @@
 """
 Job: sites
 ==========
-Dispatcher for running any atomic job over multiple sites. Reuses the inner
-job's ``parse_common``, ``parse_site``, and ``compute`` functions, and
-assembles the per-site panels into a single figure.
-
-The figure has one shared legend (top right) and, for tendency, one shared
-colorbar. Per-panel decorations (per-axes legend and per-panel colorbar) are
-suppressed. Azimuth ticks on each stereonet are stripped to save space.
-
-Optionally, each site can also be saved as its own standalone figure by
-setting ``output.per_site: true``.
+Dispatcher for running any atomic job over multiple sites, assembling per-site
+panels into a single figure. Optionally, each site can also be saved as its own
+figure by setting ``output.per_site: true``.
 
 Config reference
 ----------------
@@ -31,13 +24,13 @@ plot:
   title: "Figure-level suptitle"
   figsize: [12, 8]
   dpi: 200
-  legend_size: 7
+  legend_size: 14
   grid: [rows, cols]                # optional, auto closest-to-square
 
 output:
   dir: results/
   figure: sites.png
-  per_site: false                   # also write each site as its own file
+  per_site: false                   #  write each site as its own file
 
 Example
 -------
