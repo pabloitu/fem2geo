@@ -107,11 +107,6 @@ Supported jobs, each shown in ``tutorials/``:
 
 ## Contributing
 
-Bug reports, feature requests, and pull requests are welcome at
-[github.com/pabloitu/fem2geo](https://github.com/pabloitu/fem2geo).
+Bug reports and feature requests are welcome at
+[github.com/pabloitu/fem2geo/issues](https://github.com/pabloitu/fem2geo/issues).
 
----
-
-## License
-
-See `LICENSE`.

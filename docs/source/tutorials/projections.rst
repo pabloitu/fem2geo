@@ -251,4 +251,4 @@ extension doesn't match, the tool warns and corrects it.
 See also
 --------
 
-- :doc:`../intro/concepts`
+- :doc:`../intro/user_guide`
