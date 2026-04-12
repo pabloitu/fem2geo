@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+__all__ = ["FractureData", "FaultData", "CatalogData"]
 
 @dataclass
 class FractureData:

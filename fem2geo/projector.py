@@ -6,6 +6,7 @@ from fem2geo.utils.projections import (
     unit_factor, flip_z, reproject_xy, rotate_xy,
 )
 
+__all__ = ["Projector"]
 
 class Projector:
     """
