@@ -1,6 +1,8 @@
 import unittest
 import tempfile
 import os
+from pathlib import Path
+
 import yaml
 
 from fem2geo.internal.schema import ModelSchema
@@ -184,6 +186,16 @@ class TestLoad(unittest.TestCase):
         yaml.dump(_PACKED, tmp); tmp.close()
         try:
             s = ModelSchema.load(tmp.name)
+        finally:
+            os.unlink(tmp.name)
+        self.assertIn("stress", s.tensors)
+
+    def test_pathlib_path(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False)
+        yaml.dump(_PACKED, tmp)
+        tmp.close()
+        try:
+            s = ModelSchema.load(Path(tmp.name))
         finally:
             os.unlink(tmp.name)
         self.assertIn("stress", s.tensors)

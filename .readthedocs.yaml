@@ -4,13 +4,21 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  apt_packages:
+    - libgl1-mesa-glx
+    - libglu1-mesa
+    - xvfb
+  jobs:
+    post_install:
+      - pip install -e .[dev]
+    pre_build:
+      - |
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 &
+        sleep 1
 
 python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - dev
+  install: []
 
 sphinx:
   configuration: docs/source/conf.py

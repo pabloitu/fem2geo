@@ -42,6 +42,11 @@ autodoc_default_options = {
 import pyvista
 pyvista.OFF_SCREEN = True
 pyvista.BUILDING_GALLERY = True
+pyvista.set_plot_theme("document")
+try:
+    pyvista.start_xvfb()
+except OSError:
+    pass
 
 sphinx_gallery_conf = {
     "examples_dirs": ["../../tutorials/examples"],

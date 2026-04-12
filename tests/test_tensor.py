@@ -393,6 +393,41 @@ class TestPlaneSphe2ENUVertical(unittest.TestCase):
         dot = abs(np.dot(n1, n2))
         self.assertAlmostEqual(dot, 1.0, places=12)
 
+class TestTensorLabels(unittest.TestCase):
+    """Verify the label/symbol dicts cover every tensor kind used by jobs."""
+
+    def test_labels_cover_all_variants(self):
+        from fem2geo.utils.tensor import TENSOR_LABELS
+        for key in (
+            "stress", "stress_dev", "strain", "strain_rate",
+            "strain_plastic", "strain_elastic",
+        ):
+            self.assertIn(key, TENSOR_LABELS, msg=key)
+            self.assertEqual(len(TENSOR_LABELS[key]), 3)
+
+    def test_symbols_cover_all_variants(self):
+        from fem2geo.utils.tensor import TENSOR_SYMBOL
+        for key in (
+            "stress", "stress_dev", "strain", "strain_rate",
+            "strain_plastic", "strain_elastic",
+        ):
+            self.assertIn(key, TENSOR_SYMBOL, msg=key)
+            self.assertTrue(TENSOR_SYMBOL[key].startswith("$"))
+
+
+class TestResolvedRakeNewSignature(unittest.TestCase):
+    """Lock in the post-rename parameter name."""
+
+    def test_keyword_T_accepted(self):
+        S = np.array([[4, .1, .2], [.1, 2, .3], [.2, .3, 1.0]])
+        rakes = tm.resolved_rake(T=S, strikes=[30.0], dips=[60.0])
+        self.assertEqual(rakes.shape, (1,))
+
+    def test_scalar_inputs(self):
+        S = np.array([[4, .1, .2], [.1, 2, .3], [.2, .3, 1.0]])
+        rake_scalar = tm.resolved_rake(S, 30.0, 60.0)
+        rake_array = tm.resolved_rake(S, [30.0], [60.0])
+        np.testing.assert_allclose(rake_scalar, rake_array)
 
 if __name__ == "__main__":
     unittest.main()

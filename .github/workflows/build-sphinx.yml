@@ -18,6 +18,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install system dependencies for PyVista
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 \
+            libglu1-mesa \
+            xvfb
+
       - name: Install fem2geo
         run: |
           python -m pip install --upgrade pip
@@ -27,4 +35,4 @@ jobs:
       - name: Build documentation
         run: |
           make -C docs clean
-          make -C docs html
+          xvfb-run -a make -C docs html
