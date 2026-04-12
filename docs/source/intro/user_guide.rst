@@ -28,7 +28,7 @@ Model Data
 
 A model is a mesh of cells, each carrying the physical quantities produced
 by the solver: stress and strain tensors, displacement, velocity, plastic
-strain, and so on.
+strain, tensor invariants, etc.
 
 Different solvers use different array names. A stress tensor could be stored as six separate
 scalars (``Stress_xx``, ``Stress_yy``, …), or packed as a single Voigt array (``stresses_(Pa)``),
@@ -39,15 +39,17 @@ Once a model is loaded with the right schema, ``fem2geo`` can work with the mode
 ``fem2geo`` ships built-in schemas. For other solvers, writing a YAML file is required, which
 can be easily derived from existing schemas.
 
+.. _stereonets:
+
 Stereonets
 ----------
 
 Most ``fem2geo`` plots are stereonets. A stereonet is a flat disc that shows the lower half of a
 sphere, seen from above.
 
-.. figure:: ../_static/user_guide/lines.png
+.. figure:: ../_static/user_guide/lines.svg
    :alt: Projecting a line onto a stereonet
-   :width: 80%
+   :width: 100%
    :align: center
 
    A line through the centre of the sphere hits the bowl at one point.
@@ -66,22 +68,23 @@ plane, a slip vector — each is one point.
 a curve running from edge to edge. The pole of the plane is the point
 90° away from the curve.
 
-.. figure:: ../_static/user_guide/planes.png
-   :alt: A plane as a great circle on a stereonet
-   :width: 80%
+.. figure:: ../_static/user_guide/planes.svg
+   :alt: Stereo-plane
+   :width: 100%
    :align: center
 
    A plane in 3D is one curve on the disc. A plane is
    defined by a strike (:math:`\rho`) and dip (:math:`\delta`).
 
-**Shaded fields** are scalar fields that depend on orientation.
+**Stereo-contours** are scalar fields that depend on orientation.
 
 .. figure:: ../_static/user_guide/field.png
-   :alt: A plane as a great circle on a stereonet
+   :alt: Stereo-contour
    :width: 50%
    :align: center
 
-   For every possible line orientation, a colour shows the value of the scalar field.
+   For every possible line orientation in the stereoplot, a colour shows the value of the scalar
+   field.
 
 
 Conventions
@@ -90,18 +93,19 @@ Conventions
 Model frame
 ^^^^^^^^^^^
 
-The model lives in a right-handed Cartesian frame:
+Models usually live in a right-handed Cartesian frame. These can be:
 
-    - **X = East**, **Y = North**, **Z = Up**.
-    - Projected Coordinate Reference Systems (CRS), such as UTM19S, etc. In this cases, depth
-      is usually also in meters.
+    - A frame with **X = East**, **Y = North**, **Z = Up** and arbitrary origin.
+    - A rotated local frame for convenience, with **X** and **Y** in the horizontal
+    - An specific projected Coordinate Reference Systems (CRS), such as UTM19S, etc.
 
 
 Units are whatever the solver used. ``fem2geo`` does not rescale. When extracting a sub-region from a model
 site centres and radii must be in the same units as the model.
 
-If the model or data is georeferenced (data in lon/lat, a model in projected CRS, a DEM), the
-``project`` job reprojects it into this frame first.
+If the model or data is georeferenced (data in lon/lat, a model in projected CRS, a DEM), the model
+is in a local and/or rotated frame, the ``project`` job can reproject real data onto the model
+frame first.
 
 Stress and strain
 ^^^^^^^^^^^^^^^^^
@@ -110,36 +114,79 @@ In most models, stresses and strains follow the continuum mechanics sign convent
 tension and extension taken as positive. This is in contrast to a geomechanical convention, where
 compression/contraction have negative sign.
 
-Internally, ''fem2geo'' assumes:
+Internally, ``fem2geo`` assumes:
 
 - **Compression is negative.** A uniaxial compression along X gives a
-  negative ``stress[0, 0]``. Shortening is negative in strain.
+  negative ``stress[0, 0]``. Similarly, shortening is negative in strain.
+
+    .. figure:: ../_static/user_guide/stress.svg
+       :alt: stress-tensor
+       :width: 70%
+       :align: center
+
+       The continuum mechanics convention (in contrast to geology or geotechnical) makes
+       tension positive and compression negative. A normal stress is positive when it acts in
+       the positive coordinate direction on a positive face (outward normal along +axis).
+
 - Principal values and directions are sorted in **ascending order**. Index
   0 is the most compressive (stress) or most shortening (strain), index 2
   is the least.
 
-However, the resulting stereoplots are always in geomechanical convention, to be consistent with
-the geological literature. For instance :math:`//sigma_1` is the most compressive stress and
-:math:`//epsilon_1` is the most contractional strain.
+    .. figure:: ../_static/user_guide/principal_directions.svg
+       :alt: principal-directions
+       :width: 70%
+       :align: center
+
+       The stress tensor :math:`\boldsymbol{\sigma}` has three orthogonal eigenvectors:
+       :math:`\boldsymbol{\sigma}_1`, :math:`\boldsymbol{\sigma}_3`,
+       :math:`\boldsymbol{\sigma}_3`. along which the stress is purely
+       compressive or tensile (with no shear). In continuum mechanics the ordering is according
+       to the associated eigenvalues, with :math:`\sigma_1 \geq \sigma_2 \geq \sigma_3`, so
+       :math:`\sigma_3` is the most compressive and :math:`\sigma_1` the least.
 
 
-.. note::
+However, ``fem2geo`` resulting stereoplots are always in **geology** convention:
 
-    Shear components are given as tensor quantities (:math:`\epsilon_{ij}`, :math:`\sigma_ij`),
-    not engineering shear (:math:`\gamma_{ij}`).
+.. warning::
+
+   **Compression is positive** in ``fem2geo`` stereoplots
+
+
+This meant to be consistent with the geological literature. For instance :math:`\sigma_1` is
+the most compressive stress and :math:`\varepsilon_1` is the most contractional strain.
+
 
 
 Planes and lines
 ^^^^^^^^^^^^^^^^
 
-- **Strike** is measured clockwise from North, in degrees. Dip falls to
-  the right of the strike direction (right-hand rule).
-- **Dip** is the steepest angle of the plane, 0 (horizontal) to 90
-  (vertical).
-- **Rake** follows the Aki & Richards convention: measured from the
-  strike line along the fault plane, signed.
-- **Trend and plunge** describe lines. Trend is the azimuth from North,
-  plunge is the downward angle from horizontal.
+- **Strike** (:math:`\rho`) is measured clockwise from North, in degrees.
+- **Dip** (:math:`\delta`) is the steepest angle of the plane, 0 (horizontal) to 90
+  (vertical). Dip falls to the right of the strike direction (right-hand rule).
+- **Trend** (:math:`\alpha`) and **plunge** (:math:`\beta`) describe lines. Trend is the azimuth
+  from North, plunge is the downward angle from horizontal.
+
+.. note::
+
+   See :ref:`stereonets` for a visual guide of the plane and lines convention.
+
+- **Rake** (:math:`\lambda`) is the angle of the slip vector measured along the fault plane,
+  starting from the strike direction, in Aki & Richards convention.
+
+.. admonition:: The Aki & Richards (1980) convention
+
+   Rake is measured along the fault plane from the strike counter-clockwise, taking values between
+   -180 and 180. Positive rake means the hanging wall moved up along the slip direction
+   (reverse/thrust component). Negative rake means a normal faulting component. A rake of 0° is pure
+   left-lateral strike slip, 90° is pure reverse, 180° (or −180°) is pure right-lateral, and −90°
+   is pure normal.
+
+   .. figure:: ../_static/user_guide/aki_richards.svg
+    :alt: aki-richards
+    :width: 70%
+    :align: center
+
+    Schematic of the Aki & Richards rake convention.
 
 CSV data
 ^^^^^^^^

@@ -23,7 +23,7 @@ The input model is a finite element external simulation of a reverse fault with 
 rheology, loaded in compression. The fault accommodates slip as a weak interface
 inside the medium. The figure below shows the geometry and boundary conditions.
 
-.. figure:: ../_static/tutorials/principal_model.png
+.. figure:: ../_static/tutorials/principal_directions_model.svg
    :alt: Reverse fault model and boundary conditions
    :width: 100%
    :align: center
@@ -50,7 +50,7 @@ Run it with:
 The result is a stereonet with the three average principal directions of the
 sphere.
 
-.. figure:: ../_static/tutorials/principal_axes.png
+.. figure:: ../_static/tutorials/principal_directions_axes.png
    :alt: Principal directions at a single site
    :width: 70%
    :align: center
@@ -80,7 +80,7 @@ the sphere. A tight cluster around the average means the principal directions
 are consistent across cells; a wide spread suggests the site is located in a
 transition.
 
-.. figure:: ../_static/tutorials/principal_scatter.png
+.. figure:: ../_static/tutorials/principal_directions_scatter.png
    :alt: Principal directions with cell-wise scatter
    :width: 70%
    :align: center
@@ -129,7 +129,7 @@ Job and schema
    The ``schema`` tells ``fem2geo`` how to find stress, strain, and other
    fields in your model file, since different solvers store them under
    different names. Built-in schemas are included in ``fem2geo`` to cover the
-   common cases. See :ref:`../intro/user_guide` for the full list and how to
+   common cases. See :doc:`../intro/user_guide` for the full list and how to
    write your own.
 
 Tensor
