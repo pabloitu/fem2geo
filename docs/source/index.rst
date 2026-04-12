@@ -21,14 +21,14 @@ fem2geo
 
 
 .. |start| image:: https://img.icons8.com/nolan/64/software-installer.png
-   :target: installation.html
+   :target: intro/installation.html
    :height: 42px
 
 .. |theory| image:: https://img.icons8.com/nolan/64/literature.png
-    :target: intro/theory.html
+   :target: intro/theory.html
    :height: 42px
 
-.. |guide| image:: https://img.icons8.com/nolan/64/blocks.png
+.. |guide| image:: https://img.icons8.com/nolan/64/work.png
    :target: intro/user_guide.html
    :height: 42px
 
@@ -36,7 +36,7 @@ fem2geo
    :target: tutorials/principal-directions.html
    :height: 42px
 
-.. |jobs| image:: https://img.icons8.com/nolan/64/work.png
+.. |jobs| image:: https://img.icons8.com/nolan/64/blocks.png
    :target: jobs/fracture.html
    :height: 42px
 
@@ -102,6 +102,10 @@ Main capabilities
 - Compute slip, dilation, and combined tendency fields
 - Compare fault-based Kostrov tensors with model stress or strain axes
 
+``fem2geo`` is built on `PyVista <https://pyvista.org>`_ for mesh
+handling (and `ParaView <https://www.paraview.org>`_ visualization)
+and `mplstereonet <https://github.com/joferkington/mplstereonet>`_
+for Schmidt stereonet projection.
 
 Useful links
 ------------
