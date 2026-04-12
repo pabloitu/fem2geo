@@ -9,6 +9,8 @@ from fem2geo.internal.logger import setup_logger
 
 log = logging.getLogger("fem2geoLogger")
 
+__all__ = ["load_config", "resolve_output", "run", "main"]
+
 _JOBS = {
     "principal_directions": "fem2geo.jobs.principal_directions",
     "tendency": "fem2geo.jobs.tendency",

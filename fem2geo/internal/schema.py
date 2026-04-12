@@ -3,6 +3,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
+__all__ = ["ScalarEntry", "TensorEntry", "ModelSchema"]
 
 @dataclass
 class ScalarEntry:

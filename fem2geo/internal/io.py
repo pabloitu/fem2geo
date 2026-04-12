@@ -11,6 +11,13 @@ from fem2geo.internal.schema import ModelSchema
 
 log = logging.getLogger("fem2geoLogger")
 
+__all__ = [
+    "load_structural_csv",
+    "load_catalog_csv",
+    "load_mesh",
+    "load_raster",
+    "load_solver_output",
+]
 
 _PLANES_COLS = {"strike", "dip"}
 _FAULTS_COLS = {"strike", "dip", "rake"}

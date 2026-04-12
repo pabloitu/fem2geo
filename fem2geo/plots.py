@@ -3,6 +3,18 @@ import numpy as np
 
 from fem2geo.utils.transform import line_enu2sphe, line_rake2sphe
 
+__all__ = [
+    "get_style",
+    "stereo_field",
+    "stereo_line",
+    "stereo_pole",
+    "stereo_plane",
+    "stereo_arrow",
+    "stereo_slip_arrow",
+    "stereo_contour",
+    "stereo_axes",
+    "stereo_axes_contour",
+]
 
 MODEL_COLORS = [
     "#E63946",  # red
