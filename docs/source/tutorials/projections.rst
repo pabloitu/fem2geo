@@ -5,12 +5,17 @@ Projecting onto a Model Frame
 
 Geophysical datasets come in a variety of coordinate systems: catalogs in
 lon/lat with depth in kilometers, surface meshes in meters, rasters in
-geographic or projected CRSs. Finite-element models, on the other hand, live
-in a local cartesian frame for convenience.
+geographic or projected CRSs. Finite-element models live in a local
+cartesian frame for convenience.
 
 The ``project`` job bridges the two. It takes a georeferenced input —
 catalog, mesh, or GeoTIFF raster — and transforms it into a local model
-frame (or a model with a different real-world CRS). Every input is translated from a real-world anchor, pinned to a local-frame point, with an optional rotation.
+frame (or a model with a different real-world CRS).
+
+Every input is translated and rotated using a real-world anchor
+point that lands at a chosen local-frame point. The *anchor* is a known
+point whose coordinates you have in both frames. The rotation is optional. An intermediate
+azimuthal equidistant projection centered on the anchor is used automatically.
 
 
 Input data types
@@ -22,7 +27,8 @@ The input kind is declared as a sub-block under ``data:``:
 - ``mesh`` for ``.vtp`` / ``.vtu`` / ``.vtk`` surface or volumetric meshes
 - ``raster`` for ``.tif`` / ``.tiff`` GeoTIFF rasters
 
-This tutorial walks through three configurations from ``tutorials/7_data_to_fem_space/``, one for each input type.
+This tutorial walks through three configurations from ``tutorials/7_data_to_fem_space/``, one
+for each input type.
 
 Projecting a catalog
 --------------------
@@ -50,14 +56,15 @@ In this example:
   Bboxes are always in lon/lat/depth_km, regardless of the source CRS.
 - ``dst.anchor`` pins the point ``(lon=-71.07, lat=-20.09, 15.6 km deep)``
   to the local-frame coordinate ``(0, 0, -14)``.
-- ``dst.anchor.rotation_deg: -20`` rotates the model x-axis 20° clockwise
-  from east around the anchor.
+- ``dst.anchor.rotation_deg: -20`` rotates the model frame 20° clockwise
+  around the vertical axis through the anchor (a negative value is
+  clockwise; positive is counter-clockwise).
 
 The output is a ``.vtp`` file with one point per catalog entry and every
 numeric column preserved as point data.
 
 .. figure:: ../_static/projections_catalog.png
-   :alt: Projected earthquake catalog around Iquique
+   :alt: Projected earthquake catalog
    :width: 60%
    :align: center
 
@@ -123,8 +130,8 @@ A few raster-specific details:
   geographic raster, ``m`` or ``km`` for a projected one), while
   ``src.z_units`` describes the band value. The two are independent —
   a lon/lat DEM with elevations in meters is a normal case.
-- The output is a ``.vtp`` surface mesh with upward-pointing normals,
-  ready to visualize in ParaView alongside the model, and the slab and catalog outputs.
+- The output is a ``.vtp`` surface mesh ready to visualize in ParaView
+  alongside the model, and the slab and catalog outputs.
 
 .. figure:: ../_static/projections_topo.png
    :alt: Projected topography raster
@@ -232,8 +239,9 @@ Describes the destination model frame:
   CRS as ``src.crs``. ``depth_km`` is always positive-down.
 - ``anchor.model`` is where that same point lands in the *output* frame,
   in ``dst.units`` with z positive up.
-- ``rotation_deg`` rotates the model frame counter-clockwise around the
-  anchor. Defaults to zero.
+- ``rotation_deg`` rotates the model frame around the vertical (z) axis
+  through the anchor. Positive values rotate counter-clockwise as seen
+  from above, negative values clockwise. Defaults to zero.
 
 The ``output`` block
 ^^^^^^^^^^^^^^^^^^^^
