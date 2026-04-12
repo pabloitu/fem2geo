@@ -1,19 +1,23 @@
 """
 Job: resolved_shear
 ===================
-Compares observed fault slip directions with the shear traction predicted by
-the model's average stress tensor. Assumes the Wallace-Bott hypothesis.
+Compares observed fault slip directions with the slip direction predicted
+by resolving the in-plane shear component of a model tensor. With the
+default ``tensor: stress`` this is the Wallace-Bott prediction from the
+shear traction. Other tensors (``strain``, ``strain_rate``, ...) resolve
+the analogous shear component and give a kinematic comparison.
 
-For each fault plane (strike/dip/rake, Aki & Richards convention), the job
-plots the fault plane as a great circle, the observed slip direction as an
-arrow, and the predicted slip direction (resolved from the model) as a second
-arrow. Overlap indicates consistency; divergence indicates a stress field
-inconsistent with the observed faulting.
+For each fault plane (strike/dip/rake, Aki & Richards convention), the
+job plots the fault plane as a great circle, the observed slip direction
+as an arrow, and the predicted slip direction (resolved from the model)
+as a second arrow.
 
 Config reference
 ----------------
 job: resolved_shear
 schema: adeli                       # built-in schema name (default: adeli)
+tensor: stress                      # stress | strain | strain_rate
+                                    # strain_plastic | strain_elastic
 
 model: path/to/model.vtu            # relative to this config file
 
@@ -28,7 +32,7 @@ plot:
   dpi: 200
   legend_size: 8
   legend_loc: "best"
-  principals:                       # model average σ1/σ2/σ3 (always shown)
+  principals:                       # model average axes (always shown)
     color: "k"
     markersize: 8
   planes:                           # fault great circles
@@ -67,7 +71,7 @@ from fem2geo.internal.schema import ModelSchema
 from fem2geo.model import Model
 from fem2geo.plots import get_style, stereo_axes, stereo_plane, stereo_slip_arrow
 from fem2geo.runner import resolve_output
-from fem2geo.utils.tensor import resolved_rake
+from fem2geo.utils.tensor import resolved_rake, TENSOR_LABELS
 
 log = logging.getLogger("fem2geoLogger")
 
@@ -76,7 +80,6 @@ OBS = {"color": "#E63946", "arrowsize": 1.0, "linewidth": 1.5}
 PRED = {"color": "#2196F3", "arrowsize": 1.0, "linewidth": 1.5}
 PLANE = {"color": "grey", "alpha": 0.5, "linewidth": 0.8}
 
-LABELS = (r"$\sigma_1$", r"$\sigma_2$", r"$\sigma_3$")
 MARKERS = ("o", "s", "v")
 
 
@@ -86,11 +89,14 @@ def parse_common(cfg, job_dir):
     planes = plot.get("planes", {})
     obs = plot.get("observed", {})
     pred = plot.get("predicted", {})
+    which = cfg.get("tensor", "stress")
 
     return {
         "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
         "model_path": (job_dir / cfg["model"]).resolve(),
         "job_dir": job_dir,
+        "which": which,
+        "labels": TENSOR_LABELS[which],
         "title": plot.get("title", "Resolved shear analysis"),
         "figsize": plot.get("figsize", [8, 8]),
         "dpi": plot.get("dpi", 200),
@@ -125,6 +131,7 @@ def parse(cfg, job_dir):
 def compute(ax, model, site, params, cbar=True):
     legend = []
     fd = site["faults"]
+    labels = params["labels"]
     strikes, dips, rakes = fd.planes[:, 0], fd.planes[:, 1], fd.rakes
     ps = params["plane_style"]
     os = params["obs_style"]
@@ -133,12 +140,12 @@ def compute(ax, model, site, params, cbar=True):
     stereo_plane(ax, strikes, dips, **ps)
     stereo_slip_arrow(ax, strikes, dips, rakes, **os)
 
-    avg_stress = model.avg_tensor("stress")
-    pred = resolved_rake(avg_stress, strikes, dips)
+    avg_T = model.avg_tensor(params["which"])
+    pred = resolved_rake(avg_T, strikes, dips)
     stereo_slip_arrow(ax, strikes, dips, pred, **prs)
 
-    _, vec = model.avg_principals("stress")
-    stereo_axes(ax, vec, params["avg_style"], labels=LABELS)
+    _, vec = model.avg_principals(params["which"])
+    stereo_axes(ax, vec, params["avg_style"], labels=labels)
 
     legend.extend([
         FancyArrowPatch((0, 0), (0.02, 0), arrowstyle="->",
@@ -151,7 +158,7 @@ def compute(ax, model, site, params, cbar=True):
                alpha=ps.get("alpha", 0.5), label="Fault planes"),
     ])
     legend.extend([
-        Line2D([0], [0], color="k", lw=0, marker=MARKERS[i], label=LABELS[i])
+        Line2D([0], [0], color="k", lw=0, marker=MARKERS[i], label=labels[i])
         for i in range(3)
     ])
 

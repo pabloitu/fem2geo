@@ -282,34 +282,36 @@ def resolved_shear_enu(sigma, plane=None, normal=None, eps=1e-12):
     return mag, t_s / mag
 
 
-def resolved_rake(sigma, strikes, dips, eps=1e-12):
+def resolved_rake(T, strikes, dips, eps=1e-12):
     """
-    Predicted slip rake from resolved shear traction on each fault.
+    Predicted slip rake from the resolved shear component of a tensor on
+    each fault.
 
-    For each plane, resolves the shear traction from the stress
-    tensor and converts it to a signed rake (Aki & Richards). Faults
-    where the shear traction magnitude is below ``eps`` get NaN.
+    For each plane, resolves the in-plane shear component of the tensor
+    and converts it to a signed rake (Aki & Richards). Faults where the
+    shear magnitude is below ``eps`` get NaN.
 
     Parameters
     ----------
-    sigma : array-like, shape (3, 3)
-        Stress tensor in ENU coordinates.
+    T : array-like, shape (3, 3)
+        Symmetric tensor in ENU coordinates (stress, strain, strain rate,
+        ...).
     strikes : array-like, shape (N,)
         Strike angles in degrees.
     dips : array-like, shape (N,)
         Dip angles in degrees.
     eps : float
-        Threshold below which shear traction is treated as zero.
+        Threshold below which the shear component is treated as zero.
 
     Returns
     -------
     numpy.ndarray, shape (N,)
-        Predicted signed rake in degrees. NaN where shear
-        traction is negligible.
+        Predicted signed rake in degrees. NaN where the in-plane shear
+        component is negligible.
     """
-    S = np.asarray(sigma, dtype=float)
+    S = np.asarray(T, dtype=float)
     if S.shape != (3, 3):
-        raise ValueError("sigma must be shape (3, 3).")
+        raise ValueError("T must be shape (3, 3).")
 
     strikes = np.atleast_1d(np.asarray(strikes, dtype=float))
     dips = np.atleast_1d(np.asarray(dips, dtype=float))
