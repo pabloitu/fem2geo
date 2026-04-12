@@ -28,7 +28,7 @@ Model Data
 
 A model is a mesh of cells, each carrying the physical quantities produced
 by the solver: stress and strain tensors, displacement, velocity, plastic
-strain, and so on.
+strain, tensor invariants, etc.
 
 Different solvers use different array names. A stress tensor could be stored as six separate
 scalars (``Stress_xx``, ``Stress_yy``, …), or packed as a single Voigt array (``stresses_(Pa)``),
@@ -39,15 +39,17 @@ Once a model is loaded with the right schema, ``fem2geo`` can work with the mode
 ``fem2geo`` ships built-in schemas. For other solvers, writing a YAML file is required, which
 can be easily derived from existing schemas.
 
+.. _stereonets:
+
 Stereonets
 ----------
 
 Most ``fem2geo`` plots are stereonets. A stereonet is a flat disc that shows the lower half of a
 sphere, seen from above.
 
-.. figure:: ../_static/user_guide/lines.png
+.. figure:: ../_static/user_guide/lines.svg
    :alt: Projecting a line onto a stereonet
-   :width: 80%
+   :width: 100%
    :align: center
 
    A line through the centre of the sphere hits the bowl at one point.
@@ -66,22 +68,23 @@ plane, a slip vector — each is one point.
 a curve running from edge to edge. The pole of the plane is the point
 90° away from the curve.
 
-.. figure:: ../_static/user_guide/planes.png
-   :alt: A plane as a great circle on a stereonet
-   :width: 80%
+.. figure:: ../_static/user_guide/planes.svg
+   :alt: Stereo-plane
+   :width: 100%
    :align: center
 
    A plane in 3D is one curve on the disc. A plane is
    defined by a strike (:math:`\rho`) and dip (:math:`\delta`).
 
-**Shaded fields** are scalar fields that depend on orientation.
+**Stereo-contours** are scalar fields that depend on orientation.
 
 .. figure:: ../_static/user_guide/field.png
-   :alt: A plane as a great circle on a stereonet
+   :alt: Stereo-contour
    :width: 50%
    :align: center
 
-   For every possible line orientation, a colour shows the value of the scalar field.
+   For every possible line orientation in the stereoplot, a colour shows the value of the scalar
+   field.
 
 
 Conventions
@@ -90,18 +93,19 @@ Conventions
 Model frame
 ^^^^^^^^^^^
 
-The model lives in a right-handed Cartesian frame:
+Models usually live in a right-handed Cartesian frame. These can be:
 
-    - **X = East**, **Y = North**, **Z = Up**.
-    - Projected Coordinate Reference Systems (CRS), such as UTM19S, etc. In this cases, depth
-      is usually also in meters.
+    - A frame with **X = East**, **Y = North**, **Z = Up** and arbitrary origin.
+    - A rotated local frame for convenience, with **X** and **Y** in the horizontal
+    - An specific projected Coordinate Reference Systems (CRS), such as UTM19S, etc.
 
 
 Units are whatever the solver used. ``fem2geo`` does not rescale. When extracting a sub-region from a model
 site centres and radii must be in the same units as the model.
 
-If the model or data is georeferenced (data in lon/lat, a model in projected CRS, a DEM), the
-``project`` job reprojects it into this frame first.
+If the model or data is georeferenced (data in lon/lat, a model in projected CRS, a DEM), the model
+is in a local and/or rotated frame, the ``project`` job can reproject real data onto the model
+frame first.
 
 Stress and strain
 ^^^^^^^^^^^^^^^^^
@@ -110,36 +114,79 @@ In most models, stresses and strains follow the continuum mechanics sign convent
 tension and extension taken as positive. This is in contrast to a geomechanical convention, where
 compression/contraction have negative sign.
 
-Internally, ''fem2geo'' assumes:
+Internally, ``fem2geo`` assumes:
 
 - **Compression is negative.** A uniaxial compression along X gives a
-  negative ``stress[0, 0]``. Shortening is negative in strain.
+  negative ``stress[0, 0]``. Similarly, shortening is negative in strain.
+
+    .. figure:: ../_static/user_guide/stress.svg
+       :alt: stress-tensor
+       :width: 70%
+       :align: center
+
+       The continuum mechanics convention (in contrast to geology or geotechnical) makes
+       tension positive and compression negative. A normal stress is positive when it acts in
+       the positive coordinate direction on a positive face (outward normal along +axis).
+
 - Principal values and directions are sorted in **ascending order**. Index
   0 is the most compressive (stress) or most shortening (strain), index 2
   is the least.
 
-However, the resulting stereoplots are always in geomechanical convention, to be consistent with
-the geological literature. For instance :math:`//sigma_1` is the most compressive stress and
-:math:`//epsilon_1` is the most contractional strain.
+    .. figure:: ../_static/user_guide/principal_directions.svg
+       :alt: principal-directions
+       :width: 70%
+       :align: center
+
+       The stress tensor :math:`\boldsymbol{\sigma}` has three orthogonal eigenvectors:
+       :math:`\boldsymbol{\sigma}_1`, :math:`\boldsymbol{\sigma}_3`,
+       :math:`\boldsymbol{\sigma}_3`. along which the stress is purely
+       compressive or tensile (with no shear). In continuum mechanics the ordering is according
+       to the associated eigenvalues, with :math:`\sigma_1 \geq \sigma_2 \geq \sigma_3`, so
+       :math:`\sigma_3` is the most compressive and :math:`\sigma_1` the least.
 
 
-.. note::
+However, ``fem2geo`` resulting stereoplots are always in **geology** convention:
 
-    Shear components are given as tensor quantities (:math:`\epsilon_{ij}`, :math:`\sigma_ij`),
-    not engineering shear (:math:`\gamma_{ij}`).
+.. warning::
+
+   **Compression is positive** in ``fem2geo`` stereoplots
+
+
+This meant to be consistent with the geological literature. For instance :math:`\sigma_1` is
+the most compressive stress and :math:`\varepsilon_1` is the most contractional strain.
+
 
 
 Planes and lines
 ^^^^^^^^^^^^^^^^
 
-- **Strike** is measured clockwise from North, in degrees. Dip falls to
-  the right of the strike direction (right-hand rule).
-- **Dip** is the steepest angle of the plane, 0 (horizontal) to 90
-  (vertical).
-- **Rake** follows the Aki & Richards convention: measured from the
-  strike line along the fault plane, signed.
-- **Trend and plunge** describe lines. Trend is the azimuth from North,
-  plunge is the downward angle from horizontal.
+- **Strike** (:math:`\rho`) is measured clockwise from North, in degrees.
+- **Dip** (:math:`\delta`) is the steepest angle of the plane, 0 (horizontal) to 90
+  (vertical). Dip falls to the right of the strike direction (right-hand rule).
+- **Trend** (:math:`\alpha`) and **plunge** (:math:`\beta`) describe lines. Trend is the azimuth
+  from North, plunge is the downward angle from horizontal.
+
+.. note::
+
+   See :ref:`stereonets` for a visual guide of the plane and lines convention.
+
+- **Rake** (:math:`\lambda`) is the angle of the slip vector measured along the fault plane,
+  starting from the strike direction, in Aki & Richards convention.
+
+.. admonition:: The Aki & Richards (1980) convention
+
+   Rake is measured along the fault plane from the strike counter-clockwise, taking values between
+   -180 and 180. Positive rake means the hanging wall moved up along the slip direction
+   (reverse/thrust component). Negative rake means a normal faulting component. A rake of 0° is pure
+   left-lateral strike slip, 90° is pure reverse, 180° (or −180°) is pure right-lateral, and −90°
+   is pure normal.
+
+   .. figure:: ../_static/user_guide/aki_richards.svg
+    :alt: aki-richards
+    :width: 70%
+    :align: center
+
+    Schematic of the Aki & Richards rake convention.
 
 CSV data
 ^^^^^^^^
@@ -289,6 +336,133 @@ The folder is created if it does not exist. The ``figure`` key is
 optional; each job has a default filename. The ``vtu`` key is optional
 too; when present, the extracted sphere is saved so it can be opened in
 Paraview.
+
+
+.. _schemas:
+
+Schemas
+-------
+
+A schema tells ``fem2geo`` where to find things inside a solver output
+file. Different solvers use different names for the same quantities:
+one could call the stress tensor ``stress``, and other ``stresses``. Another solver could split
+it into six values ``stress_xx``, ``stress_yy``, etc. The
+schema maps these names to the standard names that ``fem2geo`` uses
+everywhere.
+
+Built-in schemas
+^^^^^^^^^^^^^^^^
+
+``fem2geo`` ships with schemas for the Adeli solver:
+
+.. code-block:: yaml
+
+   schema: adeli
+
+
+Writing your own
+^^^^^^^^^^^^^^^^
+
+A schema has two parts:
+
+- ``tensors`` — the stress, strain, or other 3×3 tensors.
+- ``fields`` — everything else (scalars and vectors).
+
+Most jobs need **at least one tensor**, usually stress. The exception is
+``project``, which does not touch tensor data.
+
+There are two ways to give ``fem2geo`` a schema.
+
+**Write it in a separate file** and point the config at it:
+
+.. code-block:: yaml
+
+   schema: ./my_solver.yaml
+
+The file looks like this:
+
+.. code-block:: yaml
+
+   solver: my_solver
+
+   tensors:
+     stress:
+       voigt6: "stresses_(Pa)"
+
+   fields:
+     u: { field: "displacement" }
+
+**Or write it directly in the config** for a one-off run:
+
+.. code-block:: yaml
+
+   job: principal_directions
+   schema:
+     solver: my_solver
+     tensors:
+       stress:
+         voigt6: "stresses_(Pa)"
+     fields:
+       u: { field: "displacement" }
+
+   model: ../data/run.vtu
+   site: {center: [0, 0, -1000], radius: 200}
+
+Use a separate file when you run many configs against the same solver.
+Use the inline form for quick tests.
+
+Writing a tensor
+^^^^^^^^^^^^^^^^
+
+A tensor entry has one of two shapes.
+
+If the solver packs all six components into one array:
+
+.. code-block:: yaml
+
+   stress:
+     voigt6: "stresses_(Pa)"
+
+``voigt6`` is the name of the array in the solver file. The six values
+must be in the order ``xx``, ``yy``, ``zz``, ``xy``, ``yz``, ``zx``.
+
+If the solver stores one array per component:
+
+.. code-block:: yaml
+
+   stress:
+     components:
+       xx: "Stress_xx(MPa)"
+       yy: "Stress_yy(MPa)"
+       zz: "Stress_zz(MPa)"
+       xy: "Stress_xy(MPa)"
+       yz: "Stress_yz(MPa)"
+       zx: "Stress_zx(MPa)"
+
+The names ``fem2geo`` recognises for tensors are: ``stress``,
+``stress_dev``, ``strain``, ``strain_rate``, ``strain_plastic``,
+``strain_elastic``. Only list the ones your solver saves.
+
+Writing a scalar/vector field
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Fields are scalars or vectors. Each entry maps a standard name to the
+solver's array name:
+
+.. code-block:: yaml
+
+   fields:
+     u:      { field: "displacement" }
+     plastic_eff:      { field: "effective_plastic_strain" }
+     plastic_vol:      { field: "plastic_dilation" }
+
+The standard names ``fem2geo`` knows about include:
+
+- ``u``, ``v`` — displacement and velocity.
+- ``plastic_eff``, ``plastic_vol`` — plastic strain scalars.
+
+Arrays in the solver output that the schema does not list are ignored.
+You only have to map the ones your analysis will use.
 
 Python API
 ----------
