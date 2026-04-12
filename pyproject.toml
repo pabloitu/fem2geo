@@ -54,6 +54,7 @@ test = [
 ]
 docs = [
     "sphinx",
+    "nbsphinx",
     "sphinx-autoapi",
     "sphinx_design",
     "sphinx-toolbox",
@@ -99,3 +100,18 @@ target-version = ["py310", "py311", "py312"]
 
 [tool.flake8]
 ignore = ["E203", "W503", "F401"]
+
+[tool.coverage.run]
+source = ["fem2geo"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/fem2geo/internal/tutorials.py",
+    "*/fem2geo/internal/logger.py",
+]
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]

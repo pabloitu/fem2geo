@@ -181,6 +181,16 @@ class Model:
         return self.grid.points
 
     @property
+    def n_points(self) -> np.ndarray:
+        """Mesh node coordinates, shape (N_points, 3)."""
+        return self.grid.n_points
+
+    @property
+    def cells(self) -> int:
+        """Number of cells in the mesh."""
+        return self.grid.cells
+
+    @property
     def n_cells(self) -> int:
         """Number of cells in the mesh."""
         return self.grid.number_of_cells

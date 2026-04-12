@@ -37,7 +37,7 @@ fem2geo
    :height: 42px
 
 .. |jobs| image:: https://img.icons8.com/nolan/64/blocks.png
-   :target: jobs/fracture.html
+   :target: auto_examples/01_exploring_a_model.html
    :height: 42px
 
 .. |api| image:: https://img.icons8.com/nolan/64/code--v2.png
@@ -53,7 +53,7 @@ fem2geo
 |                                              | - :ref:`fracture`                            |
 | |guide| **User Guide**                       | - :ref:`resolved-shear`                      |
 |                                              | - :ref:`kostrov`                             |
-| |jobs| **Jobs Reference**                    | - :ref:`tendency`                            |
+| |jobs| **Python Examples**                   | - :ref:`tendency`                            |
 |                                              | - :ref:`projections`                         |
 | |api| **API Reference**                      |                                              |
 +----------------------------------------------+----------------------------------------------+
@@ -147,6 +147,14 @@ Useful links
    tutorials/tendency
    tutorials/multi-sites
    tutorials/projections
+
+
+.. toctree::
+   :hidden:
+   :caption: Python examples
+
+   auto_examples/01_exploring_a_model
+   auto_examples/02_comparing_models
 
 
 .. toctree::

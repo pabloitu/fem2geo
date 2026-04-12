@@ -308,6 +308,130 @@ class TestFromFile(unittest.TestCase):
             m = Model.from_file("x.vtk", schema=_SCHEMA_EMPTY)
         self.assertIs(m.schema, _SCHEMA_EMPTY)
 
+class TestStrainVariants(unittest.TestCase):
+    """Cover strain, strain_rate and strain_elastic properties."""
 
+    def _make(self, tensors_in_schema, cell_data):
+        schema = ModelSchema.from_dict({
+            "solver": "t",
+            "tensors": {
+                name: {"voigt6": name} for name in tensors_in_schema
+            },
+            "fields": {
+                "dir_s1": {"field": "dir_s1"},
+                "dir_s3": {"field": "dir_s3"},
+            },
+        })
+        full = {**cell_data, **_DIRS}
+        return Model(_grid(full), schema)
+
+    def test_strain_assembled(self):
+        packed = np.array([[1e-3, -5e-4, -5e-4, 0, 0, 0]] * _N)
+        m = self._make(["strain"], {"strain": packed})
+        s = m.strain
+        self.assertEqual(s.shape, (_N, 3, 3))
+        np.testing.assert_allclose(s, s.transpose(0, 2, 1), atol=1e-12)
+
+    def test_strain_rate_assembled(self):
+        packed = np.array([[1e-12, -5e-13, -5e-13, 0, 0, 0]] * _N)
+        m = self._make(["strain_rate"], {"strain_rate": packed})
+        sr = m.strain_rate
+        self.assertEqual(sr.shape, (_N, 3, 3))
+
+    def test_strain_elastic_from_schema(self):
+        packed = np.array([[1e-4, 0, 0, 0, 0, 0]] * _N)
+        m = self._make(["strain_elastic"], {"strain_elastic": packed})
+        se = m.strain_elastic
+        self.assertEqual(se.shape, (_N, 3, 3))
+        np.testing.assert_allclose(se[:, 0, 0], 1e-4)
+
+    def test_strain_elastic_computed_as_difference(self):
+        strain_packed = np.array([[2e-3, 0, 0, 0, 0, 0]] * _N)
+        plastic_packed = np.array([[1e-3, 0, 0, 0, 0, 0]] * _N)
+        m = self._make(
+            ["strain", "strain_plastic"],
+            {"strain": strain_packed, "strain_plastic": plastic_packed},
+        )
+        se = m.strain_elastic
+        np.testing.assert_allclose(se[:, 0, 0], 1e-3, atol=1e-12)
+
+
+class TestAvgTensorVariants(unittest.TestCase):
+    """avg_tensor / avg_principals across all tensor kinds."""
+
+    def test_strain_avg_tensor(self):
+        packed = np.array([[1e-3, 0, 0, 0, 0, 0]] * _N)
+        schema = ModelSchema.from_dict({
+            "solver": "t",
+            "tensors": {"strain": {"voigt6": "strain"}},
+            "fields": {},
+        })
+        m = Model(_grid({"strain": packed}), schema)
+        avg = m.avg_tensor("strain")
+        self.assertEqual(avg.shape, (3, 3))
+        np.testing.assert_allclose(avg[0, 0], 1e-3, atol=1e-15)
+
+    def test_avg_principals_strain(self):
+        packed = np.array([[1e-3, -5e-4, -5e-4, 0, 0, 0]] * _N)
+        schema = ModelSchema.from_dict({
+            "solver": "t",
+            "tensors": {"strain": {"voigt6": "strain"}},
+            "fields": {},
+        })
+        m = Model(_grid({"strain": packed}), schema)
+        val, vec = m.avg_principals("strain")
+        self.assertEqual(val.shape, (3,))
+        self.assertTrue(val[0] <= val[1] <= val[2])
+        np.testing.assert_allclose(vec.T @ vec, np.eye(3), atol=1e-10)
+
+
+class TestScalarFieldProperties(unittest.TestCase):
+    """Happy-path and failure-path for scalar field lookups."""
+
+    def _with_fields(self, data):
+        schema = ModelSchema.from_dict({
+            "solver": "t",
+            "fields": {k: {"field": k} for k in data},
+        })
+        return Model(_grid(data), schema)
+
+    def test_mean_stress(self):
+        m = self._with_fields({"mean_stress": np.full(_N, -2.0)})
+        np.testing.assert_allclose(m.mean_stress, -2.0)
+
+    def test_j2_stress(self):
+        m = self._with_fields({"j2_stress": np.full(_N, 1.5)})
+        np.testing.assert_allclose(m.j2_stress, 1.5)
+
+    def test_temperature(self):
+        m = self._with_fields({"temperature": np.full(_N, 300.0)})
+        np.testing.assert_allclose(m.temperature, 300.0)
+
+    def test_viscosity(self):
+        m = self._with_fields({"viscosity": np.full(_N, 1e21)})
+        np.testing.assert_allclose(m.viscosity, 1e21)
+
+    def test_vector_field_u(self):
+        u = np.tile([1.0, 0.0, -0.5], (_N, 1))
+        m = self._with_fields({"u": u})
+        np.testing.assert_allclose(m.u, u)
+
+
+class TestFromFilePathDispatch(unittest.TestCase):
+    """Model.from_file should route strings through ModelSchema.load."""
+
+    def test_string_dispatches_via_load(self):
+        with patch("fem2geo.model.load_solver_output", return_value=_grid({})), \
+             patch("fem2geo.model.ModelSchema.load",
+                   return_value=_SCHEMA_EMPTY) as mock:
+            m = Model.from_file("x.vtk", schema="adeli")
+        mock.assert_called_once_with("adeli")
+        self.assertIsInstance(m, Model)
+
+    def test_instance_bypasses_load(self):
+        with patch("fem2geo.model.load_solver_output", return_value=_grid({})), \
+             patch("fem2geo.model.ModelSchema.load") as mock:
+            Model.from_file("x.vtk", schema=_SCHEMA_EMPTY)
+        mock.assert_not_called()
 if __name__ == "__main__":
     unittest.main()
