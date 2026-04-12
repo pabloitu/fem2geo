@@ -25,11 +25,11 @@ fem2geo
    :height: 42px
 
 .. |theory| image:: https://img.icons8.com/nolan/64/literature.png
-   :target: theory/index.html
+    :target: intro/theory.html
    :height: 42px
 
-.. |concepts| image:: https://img.icons8.com/nolan/64/blocks.png
-   :target: concepts/index.html
+.. |guide| image:: https://img.icons8.com/nolan/64/blocks.png
+   :target: intro/user_guide.html
    :height: 42px
 
 .. |tutorials| image:: https://img.icons8.com/nolan/64/bicycle.png
@@ -51,7 +51,7 @@ fem2geo
 |                                              |                                              |
 | |theory| **Theory and Conventions**          | - :ref:`principal-directions`                |
 |                                              | - :ref:`fracture`                            |
-| |concepts| **Core Concepts**                 | - :ref:`resolved-shear`                      |
+| |guide| **User Guide**                       | - :ref:`resolved-shear`                      |
 |                                              | - :ref:`kostrov`                             |
 | |jobs| **Jobs Reference**                    | - :ref:`tendency`                            |
 |                                              | - :ref:`projections`                         |
@@ -128,7 +128,7 @@ Useful links
 
    intro/installation
    intro/theory
-   intro/concepts
+   intro/user_guide
 
 
 .. toctree::

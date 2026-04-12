@@ -129,7 +129,7 @@ Job and schema
    The ``schema`` tells ``fem2geo`` how to find stress, strain, and other
    fields in your model file, since different solvers store them under
    different names. Built-in schemas are included in ``fem2geo`` to cover the
-   common cases. See :doc:`../intro/concepts` for the full list and how to
+   common cases. See :ref:`../intro/user_guide` for the full list and how to
    write your own.
 
 Tensor
@@ -217,4 +217,4 @@ See also
 
 - :ref:`multi_sites`
 - :doc:`../intro/theory`
-- :doc:`../intro/concepts`
+- :doc:`../intro/user_guide`
