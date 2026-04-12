@@ -21,6 +21,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "sphinx_design",
+    "sphinx_gallery.gen_gallery",
 ]
 
 github_username = "pabloitu"
@@ -37,6 +38,20 @@ pygments_style = "default"
 autodoc_typehints = "description"
 autodoc_default_options = {
     'imported-members': False,
+}
+import pyvista
+pyvista.OFF_SCREEN = True
+pyvista.BUILDING_GALLERY = True
+
+sphinx_gallery_conf = {
+    "examples_dirs": ["../../tutorials/examples"],
+    "gallery_dirs": ["auto_examples"],
+    "filename_pattern": r"^.*\.py$",
+    "image_scrapers": ("matplotlib", "pyvista"),
+    "within_subsection_order": "FileNameSortKey",
+    "remove_config_comments": True,
+    "plot_gallery": "True",
+    "thumbnail_size": (320, 224),
 }
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),

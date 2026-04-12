@@ -54,6 +54,7 @@ test = [
 ]
 docs = [
     "sphinx",
+    "nbsphinx",
     "sphinx-autoapi",
     "sphinx_design",
     "sphinx-toolbox",
