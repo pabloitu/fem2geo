@@ -130,6 +130,12 @@ class TestLoad(unittest.TestCase):
         s = ModelSchema.from_dict(_PACKED)
         self.assertIs(ModelSchema.load(s), s)
 
+    def test_inline_dict(self):
+        s = ModelSchema.load(_PACKED)
+        self.assertIn("stress", s.tensors)
+        self.assertIn("strain", s.tensors)
+        self.assertEqual(s.name, "adeli2")
+
     def test_builtin_name(self):
         try:
             s = ModelSchema.load("adeli")

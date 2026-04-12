@@ -140,13 +140,21 @@ class ModelSchema:
     @classmethod
     def load(cls, arg, base_dir=None) -> "ModelSchema":
         """
-        Load a schema from a built-in name, a file path, or pass
-        through an existing instance.
+        Load a schema from a built-in name, a file path, an inline
+        dict, or pass through an existing instance.
+
+        - If ``arg`` is already a ``ModelSchema``, return it unchanged.
+        - If ``arg`` is a dict, build a schema from it directly.
+        - If ``arg`` looks like a path (contains a separator or ends
+          in ``.yaml`` / ``.yml``), resolve against ``base_dir`` and
+          load the YAML file.
+        - Otherwise treat it as a built-in schema name.
 
         Parameters
         ----------
-        arg : str or Path or ModelSchema
-            Built-in name, path to a YAML file, or a schema instance.
+        arg : str or Path or dict or ModelSchema
+            Built-in name, path to a YAML file, inline schema
+            definition, or a schema instance.
         base_dir : str or Path, optional
             Directory used to resolve relative paths. Usually the
             directory of the config file that referenced the schema.
@@ -157,6 +165,9 @@ class ModelSchema:
         """
         if isinstance(arg, cls):
             return arg
+
+        if isinstance(arg, dict):
+            return cls.from_dict(arg)
 
         s = str(arg)
         looks_like_path = (
