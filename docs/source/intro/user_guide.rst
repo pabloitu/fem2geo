@@ -337,6 +337,133 @@ optional; each job has a default filename. The ``vtu`` key is optional
 too; when present, the extracted sphere is saved so it can be opened in
 Paraview.
 
+
+.. _schemas:
+
+Schemas
+-------
+
+A schema tells ``fem2geo`` where to find things inside a solver output
+file. Different solvers use different names for the same quantities:
+one could call the stress tensor ``stress``, and other ``stresses``. Another solver could split
+it into six values ``stress_xx``, ``stress_yy``, etc. The
+schema maps these names to the standard names that ``fem2geo`` uses
+everywhere.
+
+Built-in schemas
+^^^^^^^^^^^^^^^^
+
+``fem2geo`` ships with schemas for the Adeli solver:
+
+.. code-block:: yaml
+
+   schema: adeli
+
+
+Writing your own
+^^^^^^^^^^^^^^^^
+
+A schema has two parts:
+
+- ``tensors`` — the stress, strain, or other 3×3 tensors.
+- ``fields`` — everything else (scalars and vectors).
+
+Most jobs need **at least one tensor**, usually stress. The exception is
+``project``, which does not touch tensor data.
+
+There are two ways to give ``fem2geo`` a schema.
+
+**Write it in a separate file** and point the config at it:
+
+.. code-block:: yaml
+
+   schema: ./my_solver.yaml
+
+The file looks like this:
+
+.. code-block:: yaml
+
+   solver: my_solver
+
+   tensors:
+     stress:
+       voigt6: "stresses_(Pa)"
+
+   fields:
+     u: { field: "displacement" }
+
+**Or write it directly in the config** for a one-off run:
+
+.. code-block:: yaml
+
+   job: principal_directions
+   schema:
+     solver: my_solver
+     tensors:
+       stress:
+         voigt6: "stresses_(Pa)"
+     fields:
+       u: { field: "displacement" }
+
+   model: ../data/run.vtu
+   site: {center: [0, 0, -1000], radius: 200}
+
+Use a separate file when you run many configs against the same solver.
+Use the inline form for quick tests.
+
+Writing a tensor
+^^^^^^^^^^^^^^^^
+
+A tensor entry has one of two shapes.
+
+If the solver packs all six components into one array:
+
+.. code-block:: yaml
+
+   stress:
+     voigt6: "stresses_(Pa)"
+
+``voigt6`` is the name of the array in the solver file. The six values
+must be in the order ``xx``, ``yy``, ``zz``, ``xy``, ``yz``, ``zx``.
+
+If the solver stores one array per component:
+
+.. code-block:: yaml
+
+   stress:
+     components:
+       xx: "Stress_xx(MPa)"
+       yy: "Stress_yy(MPa)"
+       zz: "Stress_zz(MPa)"
+       xy: "Stress_xy(MPa)"
+       yz: "Stress_yz(MPa)"
+       zx: "Stress_zx(MPa)"
+
+The names ``fem2geo`` recognises for tensors are: ``stress``,
+``stress_dev``, ``strain``, ``strain_rate``, ``strain_plastic``,
+``strain_elastic``. Only list the ones your solver saves.
+
+Writing a scalar/vector field
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Fields are scalars or vectors. Each entry maps a standard name to the
+solver's array name:
+
+.. code-block:: yaml
+
+   fields:
+     u:      { field: "displacement" }
+     plastic_eff:      { field: "effective_plastic_strain" }
+     plastic_vol:      { field: "plastic_dilation" }
+
+The standard names ``fem2geo`` knows about include:
+
+- ``u``, ``v`` — displacement and velocity.
+- ``plastic_eff``, ``plastic_vol`` — plastic strain scalars.
+
+Arrays in the solver output that the schema does not list are ignored.
+You only have to map the ones your analysis will use.
+
 Python API
 ----------
 
