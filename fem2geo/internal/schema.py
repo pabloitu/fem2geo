@@ -136,3 +136,37 @@ class ModelSchema:
             ]
             raise ValueError(f"No built-in schema '{name}'. Available: {available}")
         return cls.from_yaml(p)
+
+    @classmethod
+    def load(cls, arg, base_dir=None) -> "ModelSchema":
+        """
+        Load a schema from a built-in name, a file path, or pass
+        through an existing instance.
+
+        Parameters
+        ----------
+        arg : str or Path or ModelSchema
+            Built-in name, path to a YAML file, or a schema instance.
+        base_dir : str or Path, optional
+            Directory used to resolve relative paths. Usually the
+            directory of the config file that referenced the schema.
+
+        Returns
+        -------
+        ModelSchema
+        """
+        if isinstance(arg, cls):
+            return arg
+
+        s = str(arg)
+        looks_like_path = (
+            s.endswith(".yaml") or s.endswith(".yml")
+            or "/" in s or "\\" in s
+        )
+        if looks_like_path:
+            p = Path(s)
+            if not p.is_absolute() and base_dir is not None:
+                p = Path(base_dir) / p
+            return cls.from_yaml(p.resolve())
+
+        return cls.builtin(s)

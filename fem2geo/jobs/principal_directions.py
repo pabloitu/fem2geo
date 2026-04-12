@@ -73,7 +73,7 @@ def parse_common(cfg, job_dir):
     which = cfg.get("tensor", "stress")
 
     return {
-        "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
+        "schema": ModelSchema.load(cfg.get("schema", "adeli"), job_dir),
         "model_path": (job_dir / cfg["model"]).resolve(),
         "which": which,
         "labels": TENSOR_LABELS[which],

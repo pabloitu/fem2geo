@@ -47,14 +47,15 @@ class Model:
         path : str or Path
             Path to the mesh file.
         schema : ModelSchema or str
-            Schema instance or name of built-in schema (e.g. ``"adeli"``, ``"adeli2"``).
+            Schema instance, name of a built-in schema (e.g. ``"adeli"``,
+            ``"adeli2"``), or path to a custom schema YAML file.
 
         Returns
         -------
         Model
         """
         if isinstance(schema, str):
-            schema = ModelSchema.builtin(schema)
+            schema = ModelSchema.load(schema)
         return cls(load_solver_output(path, schema), schema)
 
     # tensors

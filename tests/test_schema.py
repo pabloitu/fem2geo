@@ -124,5 +124,64 @@ class TestAdeliBuiltin(unittest.TestCase):
             self.assertIn(f, self.s.fields, msg=f)
 
 
+class TestLoad(unittest.TestCase):
+
+    def test_passthrough_instance(self):
+        s = ModelSchema.from_dict(_PACKED)
+        self.assertIs(ModelSchema.load(s), s)
+
+    def test_builtin_name(self):
+        try:
+            s = ModelSchema.load("adeli")
+        except ValueError:
+            self.skipTest("adeli.yaml not found")
+        self.assertEqual(s.name, "adeli")
+
+    def test_unknown_builtin_raises(self):
+        with self.assertRaises(ValueError):
+            ModelSchema.load("nope")
+
+    def test_absolute_path(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False)
+        yaml.dump(_PACKED, tmp); tmp.close()
+        try:
+            s = ModelSchema.load(tmp.name)
+        finally:
+            os.unlink(tmp.name)
+        self.assertIn("stress", s.tensors)
+        self.assertIn("strain", s.tensors)
+
+    def test_relative_path_with_base_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "my.yaml")
+            with open(p, "w") as f:
+                yaml.dump(_PACKED, f)
+            s = ModelSchema.load("my.yaml", base_dir=d)
+        self.assertIn("stress", s.tensors)
+
+    def test_relative_path_with_subdir(self):
+        with tempfile.TemporaryDirectory() as d:
+            sub = os.path.join(d, "schemas")
+            os.makedirs(sub)
+            p = os.path.join(sub, "my.yaml")
+            with open(p, "w") as f:
+                yaml.dump(_PACKED, f)
+            s = ModelSchema.load("schemas/my.yaml", base_dir=d)
+        self.assertIn("stress", s.tensors)
+
+    def test_missing_path_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            ModelSchema.load("/tmp/__does_not_exist__.yaml")
+
+    def test_path_detected_by_extension(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".yml", mode="w", delete=False)
+        yaml.dump(_PACKED, tmp); tmp.close()
+        try:
+            s = ModelSchema.load(tmp.name)
+        finally:
+            os.unlink(tmp.name)
+        self.assertIn("stress", s.tensors)
+
+
 if __name__ == "__main__":
     unittest.main()
