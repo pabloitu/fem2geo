@@ -118,7 +118,7 @@ def parse_common(cfg, job_dir):
     merged_cbar = {**CBAR, **cbar}
 
     return {
-        "schema": ModelSchema.builtin(cfg.get("schema", "adeli")),
+        "schema": ModelSchema.load(cfg.get("schema", "adeli"), job_dir),
         "model_path": (job_dir / cfg["model"]).resolve(),
         "job_dir": job_dir,
         "variant": variant,
