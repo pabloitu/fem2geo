@@ -63,12 +63,8 @@ In this example:
 The output is a ``.vtp`` file with one point per catalog entry and every
 numeric column preserved as point data.
 
-.. figure:: ../_static/projections_catalog.png
-   :alt: Projected earthquake catalog
-   :width: 60%
-   :align: center
 
-   Earthquake catalog projected into the local model frame.
+TODO: ADD FIGURE Earthquake catalog projected into the local model frame.
 
 Projecting a mesh
 -----------------
@@ -97,12 +93,7 @@ Points of note:
 - The output keeps the mesh topology and all original point data, written
   as ``.vtu``.
 
-.. figure:: ../_static/projections_slab.png
-   :alt: Projected slab interface
-   :width: 60%
-   :align: center
-
-   Slab interface projected into the local model frame.
+TODO: ADD FIGURE Slab interface projected into the local model frame.
 
 Projecting a raster
 -------------------
@@ -133,12 +124,7 @@ A few raster-specific details:
 - The output is a ``.vtp`` surface mesh ready to visualize in ParaView
   alongside the model, and the slab and catalog outputs.
 
-.. figure:: ../_static/projections_topo.png
-   :alt: Projected topography raster
-   :width: 60%
-   :align: center
-
-   Topography raster projected into the local model frame.
+TODO: ADD FIGURE Topography raster projected into the local model frame.
 
 Understanding the configuration
 -------------------------------
