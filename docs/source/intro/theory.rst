@@ -57,22 +57,45 @@ where :math:`\gamma_0` is the initial fluidity, the inverse of a non-linear visc
 
 
 1.3 Numerical implementation with ADELI
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-ADELI  (Hassani et al., 1997,Chery et al., 2001) is a 3D Finite Element algorithm developed to solve the differential equations of quasi-static equilibrium and mass conservation using a time-explicit dynamic Relaxation Method (Cundall & Board, 1988). This method is well known for being able to track the onset and the development of localized elasto-plastic deformation. ADELI has been widely used to simulate a variety of tectono-volcanic and geodynamic settings (e.g., Cerpa et al, 2015, Gerbault et al., 2018, Ruz-Ginouves et al., 2021, Novoa et al. 2019, 2022).
+ADELI  (Hassani et al.,1997, Chery et al., 2001) is a 3D Finite Element algorithm developed to solve the differential equations of quasi-static equilibrium and mass conservation using a time-explicit dynamic Relaxation Method (Cundall & Board, 1988). This method is well known for being able to track the onset and the development of localized elasto-plastic deformation. ADELI has been widely used to simulate a variety of tectono-volcanic and geodynamic settings (e.g., Cerpa et al, 2015, Gerbault et al., 2018, Ruz-Ginouves et al., 2021, Novoa et al. 2019, 2022).
 
 The three-dimensional space is discretized with tetrahedra, forming an unstructured mesh generated using the `GMSH <https://www.gmsh.info>`_ software (Geuzaine and Lemacle, 2009).
 
-More details regarding the equations and method can be found in eg. Chery et al.  (2001) or Cerpa et al. (2015).
+More details regarding the equations and method can be found in eg. Chery et al. (2001) or Cerpa et al. (2015).
 
-1.4 Other mechanical approaches: eg. FENICS (Felipe)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Saez et al. (2023)  addressed the first-order, time-dependent control that an active strike-slip crustal fault can exert on a nearby geothermal reservoir, by implementing a poro-elasto-plastic Finite Element Method (FEM) based on the Python opensource library FEniCS (Alaes et al., 2015).
+1.4 Other mechanical approaches: eg. FEniCS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Sáez-Leiva et al. (2023) addressed the first-order, time-dependent control that an active strike-slip crustal fault can exert on a nearby geothermal reservoir, by implementing a poro-elasto-plastic Finite Element Method (FEM) based on the Python opensource library FEniCS (Alaes et al., 2015).
 
-A fully-coupled poro-elasto-plastic formulation is implemented, considering solid and fluid as a continuum that satisfies the two main equations of mass balance and Darcy flow, which are solved for solid displacement :math:`\mathbf{u}` and fluid pressure :math:`{p}`.
+As fluid flow plays a crucial role in the development of numerous geological processes (i.e. :math:`CO_2` injection, hydraulic fracturing, magma intrusion, among others), it
+needs to be taken into account when modelling deformation in the crust. Even though most fluid flow in the upper crust goes through fracture networks, approximation
+through Darcy's law for porous media is a quite used approach in the poromechanics community and, is the assumption taken in our formulation. With absence of gravity, fluid flow in a porous medium can be described as the following:
 
-More details can be found in Saez et al. (2023).
+    :math:`\mathbf{q}(p) = -\frac{\kappa}{\mu} \nabla{p}`
+
+The solid matrix is modeled as a elasto-plastic solid in which plasticity is implemented considering an additive decomposition of the strain tensor:
+
+    :math:`\varepsilon = \varepsilon^{elas} + \varepsilon^{plas}`,
+
+then an incremental constitutive law is used to define a variation of the Cauchy stress tensor :math:`\Delta \sigma`:
+
+    :math:`\Delta \sigma = \mathcal{D}^{elas}:\Delta \varepsilon^{elas} + \mathcal{D}^{plas}:\Delta \varepsilon^{plas}`,
+
+where :math:`\mathcal{D}^{elas}` and :math:`\mathcal{D}^{plas}` are the elastic and elasto-plastic tangent operators.
+
+Considering these two domains, a fully-coupled poro-elasto-plastic formulation is implemented, considering solid and fluid as a continuum that satisfies the two main equations of mass balance and Darcy flow, which are solved for solid displacement :math:`\mathbf{u}` and fluid pressure :math:`{p}`. 
+The Python library FEniCS provides a framework to solve Partial Differential Equations through the Finite Element Method. FEniCS allows this by solving the weak form which, in this case, correspond to mass and momentum conservation:
+
+    :math:`\alpha \int_{\Omega} (\epsilon_v (\mathbf{u}^{t+1}) - \epsilon_v (\mathbf{u}^t))\cdot \psi + \frac{1}{M} (p^{t+1} - p) \cdot \psi + div (\mathbf{q}(p^{t+1}) \Delta t \cdot \psi d\Omega = 0`
+   
+    :math:`\alpha \int_{\Omega} \sigma ^{t+1} : \varepsilon(\eta) d\Omega - \int_{\partial \Gamma_{t}} \sigma n \cdot \hat{n} d\Gamma = 0`
+
+These equations where reworked for the FEniCS implementation, which was solved by Newton's method using the tangent operators described before. More details can be found in Sáez-Leiva et al. (2023).
+
+A poroelastic `FEniCSx <https://fenicsproject.org>`_ (the current version of the FEniCS Project) code is currently under development.
 
 
 2. Geological framework (José)
@@ -87,7 +110,7 @@ This method is often visualized using stereonets (stereoplots), which are projec
 In Fem2Geo we inform slip and dilation tendencies obtained out of the resulting stress orientations produced element wise throughout the modeled domain, in the aim to compare them with available "real" data sets.
 
 
-2.1 Definitions
+3.1 Definitions
 ^^^^^^^^^^^^^^^
 
 
