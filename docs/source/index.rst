@@ -162,6 +162,7 @@ Useful links
    :caption: Help & Reference
 
    reference/api_reference
+   Contributing <https://github.com/pabloitu/fem2geo/blob/master/CONTRIBUTING.md>
    GitHub Repository <https://github.com/pabloitu/fem2geo>
    Getting Help <https://github.com/pabloitu/fem2geo/issues>
    License <https://github.com/pabloitu/fem2geo/blob/master/LICENSE>
