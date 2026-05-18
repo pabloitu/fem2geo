@@ -93,3 +93,10 @@ From the repository root, with the dev environment active:
    $ make html
 
 Open ``docs/build/html/index.html`` in a browser to preview it.
+
+.. seealso::
+
+   For code or documentation contributions workflow
+   see `CONTRIBUTING.md
+   <https://github.com/pabloitu/fem2geo/blob/main/CONTRIBUTING.md>`_
+   in the repository.
