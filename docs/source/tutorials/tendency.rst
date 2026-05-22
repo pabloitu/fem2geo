@@ -4,11 +4,13 @@ Tendency Plots
 ==============
 
 Introduction
-----
+------------
+
 Hello world, from the stress ratio deduced from the avaialbe pricnipal stress components, one can deduce locally, the stress regime and tendency to slip... CECILE TO FILL.. or cf. *theory section*.
 
 Guide to input scripts
-----
+----------------------
+
 Examples are provided for Normal, Strike slip and Reverse faults in a rectangular crustal domain containing a pre-existing weak fault zone.
 
 Following the first example file provided in tutorials/a_dilation_NormF, one
