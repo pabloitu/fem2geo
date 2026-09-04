@@ -1,0 +1,30 @@
+job: project
+
+data:
+  raster:
+    file: ./merged.tif
+    z_band: 1
+
+src:
+  crs: epsg:4326
+  xy_units: deg
+  z_units: m
+  z_positive: up
+  bbox:
+    lon: [-72.0, -69.0]
+    lat: [-37.5, -48.0]
+
+dst:
+  units: m
+  crs: espg:32718
+  anchor:
+    data:
+      lon: -70.929
+      lat: -20.17
+      depth_km: 18
+    model: [0, 0, 0]
+    rotation_deg: 0
+
+output:
+  dir: results/
+  file: topo.vtp
